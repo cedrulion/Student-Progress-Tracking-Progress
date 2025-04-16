@@ -1,0 +1,250 @@
+import { createContext, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import { toast } from 'react-toastify';
+
+const AuthContext = createContext();
+
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  // Set auth token - improved to ensure synchronous localStorage setting
+  const setAuthToken = (token) => {
+    console.log("Setting auth token:", token ? "token present" : "token removed");
+    
+    if (token) {
+      // Set in localStorage first to ensure persistence
+      localStorage.setItem('token', token);
+      // Then update axios headers
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      // Then update state
+      setToken(token);
+      
+      // Verify token was stored
+      const storedToken = localStorage.getItem('token');
+      console.log("Token in localStorage after setting:", storedToken ? "present" : "missing");
+    } else {
+      // Clear token from localStorage
+      localStorage.removeItem('token');
+      // Clear from axios headers
+      delete axios.defaults.headers.common['Authorization'];
+      // Update state
+      setToken(null);
+      
+      console.log("Token removed from localStorage and axios headers");
+    }
+  };
+
+  // Load user - improved with better error handling
+  const loadUser = async () => {
+    console.log("Loading user with token:", localStorage.getItem('token'));
+    
+    // Ensure headers are set before making the request
+    const currentToken = localStorage.getItem('token');
+    if (currentToken) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${currentToken}`;
+    }
+    
+    try {
+      const res = await axios.get('http://localhost:5000/api/auth/me');
+      console.log("User loaded successfully:", res.data.data);
+      setUser(res.data.data);
+      setIsAuthenticated(true);
+      return res.data.data;
+    } catch (err) {
+      console.error("Failed to load user:", err.response?.data || err.message);
+      
+      // Check if it's an auth error (401/403) before logging out
+      if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+        console.log("Auth error - logging out");
+        logout();
+      } else {
+        console.log("Non-auth error - not logging out");
+        setLoading(false);
+      }
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Register user - updated with improved token handling
+  const register = async (formData) => {
+    try {
+      const res = await axios.post('http://localhost:5000/api/auth/register', formData);
+      
+      if (!res.data.token) {
+        throw new Error('No token received from server during registration');
+      }
+      
+      console.log("Registration successful, received token");
+      setAuthToken(res.data.token);
+      
+      // Set user directly from response to avoid extra API call
+      setUser(res.data.user);
+      setIsAuthenticated(true);
+      
+      toast.success('Registration successful! Please check your email to verify your account.');
+      
+      // Navigate after everything else is done
+      setTimeout(() => {
+        navigate(`/${res.data.user.role}/dashboard`);
+      }, 100);
+      
+      return res.data;
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Registration failed');
+      throw err;
+    }
+  };
+
+  // Login user - completely revised for better token handling
+  const login = async (formData) => {
+    try {
+      console.log('Login started with:', formData.email);
+      setLoading(true);
+      
+      const res = await axios.post('http://localhost:5000/api/auth/login', formData);
+      console.log('Login response received:', res.data);
+      
+      if (!res.data.token) {
+        throw new Error('No token received from server during login');
+      }
+      
+      // Explicitly handle token setting
+      console.log('Setting token from login response');
+      setAuthToken(res.data.token);
+      
+      // Set user directly from response to avoid the extra API call
+      setUser(res.data.user);
+      setIsAuthenticated(true);
+      
+      toast.success('Login successful!');
+      
+      // Navigate after a small delay to ensure state updates have been processed
+      console.log('Navigating to dashboard');
+      setTimeout(() => {
+        navigate(`/${res.data.user.role}/dashboard`);
+      }, 100);
+      
+      return res.data;
+    } catch (err) {
+      console.error('Login error:', err);
+      setLoading(false);
+      const errorMsg = err.response?.data?.message || err.message || 'Login failed';
+      toast.error(errorMsg);
+      throw new Error(errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Logout user - updated to ensure token cleanup
+  const logout = () => {
+    console.log("Logging out - removing token");
+    setAuthToken(null);
+    setUser(null);
+    setIsAuthenticated(false);
+    
+    // Verify token removal
+    const storedToken = localStorage.getItem('token');
+    console.log("Token in localStorage after logout:", storedToken ? "still present (error)" : "removed successfully");
+    
+    navigate('/login', { replace: true });
+  };
+
+  // Verify email
+  const verifyEmail = async (token) => {
+    try {
+      await axios.get(`http://localhost:5000/api/auth/verify-email/${token}`);
+      if (user) {
+        const updatedUser = { ...user, isVerified: true };
+        setUser(updatedUser);
+      }
+      toast.success('Email verified successfully!');
+      return true;
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Email verification failed');
+      return false;
+    }
+  };
+
+  // Forgot password
+  const forgotPassword = async (email) => {
+    try {
+      await axios.post('http://localhost:5000/api/auth/forgot-password', { email });
+      toast.success('Password reset email sent. Please check your inbox.');
+      return true;
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to send reset email');
+      return false;
+    }
+  };
+
+  // Reset password
+  const resetPassword = async (token, password) => {
+    try {
+      await axios.put(`http://localhost:5000/api/auth/reset-password/${token}`, { password });
+      toast.success('Password reset successful. You can now login with your new password.');
+      return true;
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Password reset failed');
+      return false;
+    }
+  };
+
+  // Modified useEffect to better handle initial token
+  useEffect(() => {
+    const initialToken = localStorage.getItem('token');
+    console.log("Initial token on mount:", initialToken ? "found in localStorage" : "not found");
+    
+    if (initialToken) {
+      // Ensure axios headers are set with the token from localStorage
+      axios.defaults.headers.common['Authorization'] = `Bearer ${initialToken}`;
+      // Ensure token state matches localStorage
+      setToken(initialToken);
+      
+      // Try to load the user with this token
+      loadUser()
+        .then(() => {
+          console.log("Initial user load successful");
+        })
+        .catch((err) => {
+          console.error("Initial user load failed:", err.message);
+          // Only clear token if it's an auth error
+          if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+            setAuthToken(null);
+          }
+        });
+    } else {
+      setLoading(false);
+    }
+    // Remove token dependency to prevent re-runs that could cause issues
+  }, []);
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        isAuthenticated,
+        loading,
+        register,
+        login,
+        logout,
+        verifyEmail,
+        forgotPassword,
+        resetPassword,
+        loadUser
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export default AuthContext;
