@@ -21,12 +21,14 @@ router.put('/approve-transcript/:studentId/:requestId', adminController.approveT
 router.put('/approve-progress/:institutionId/:requestId', adminController.approveProgressRequest);
 router.get('/pending-requests', adminController.getPendingRequests);
 router.get('/transcripts/pending', adminController.getPendingTranscripts);
-router.get('/transcripts/pending-count', adminController.getPendingTranscripts);
 
-// Dashboard routes
+// Count routes (for dashboard)
+router.get('/students/count', adminController.getStudentCount);
+router.get('/institutions/count', adminController.getInstitutionCount);
+router.get('/transcripts/pending-count', adminController.getPendingTranscriptsCount);
+router.get('/progress/pending-count', adminController.getPendingProgressCount);
+
+// Dashboard stats (all in one)
 router.get('/stats', adminController.getDashboardStats);
-router.get('/students/count', adminController.getDashboardStats);
-router.get('/institutions/count', adminController.getDashboardStats);
-router.get('/progress/pending-count', adminController.getDashboardStats);
 
 module.exports = router;

@@ -6,10 +6,10 @@ import axios from 'axios';
 const AdminDashboard = () => {
 
   const [stats, setStats] = useState({
-    students: 0,
-    institutions: 0,
-    pendingTranscripts: 0,
-    pendingProgress: 0
+    students: [],
+    institutions: [],
+    pendingTranscripts: [],
+    pendingProgress: []
   });
 
   useEffect(() => {

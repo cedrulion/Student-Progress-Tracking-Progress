@@ -189,30 +189,6 @@ exports.getPendingRequests = async (req, res, next) => {
   }
 };
 
-// Get dashboard statistics
-exports.getDashboardStats = async (req, res, next) => {
-  try {
-    const [studentsCount, institutionsCount, pendingTranscripts, pendingProgress] = await Promise.all([
-      Student.countDocuments(),
-      Institution.countDocuments(),
-      Student.countDocuments({ 'transcriptRequests.status': 'pending' }),
-      Institution.countDocuments({ 'requestedStudents.status': 'pending' })
-    ]);
-    
-    res.status(200).json({
-      success: true,
-      data: {
-        students: studentsCount,
-        institutions: institutionsCount,
-        pendingTranscripts,
-        pendingProgress
-      }
-    });
-  } catch (err) {
-    next(err);
-  }
-};
-
 // Get pending transcript requests
 exports.getPendingTranscripts = async (req, res, next) => {
   try {
@@ -234,6 +210,67 @@ exports.getPendingTranscripts = async (req, res, next) => {
     );
     
     res.status(200).json({ success: true, data: requests });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Dashboard statistics - Individual count endpoints
+exports.getStudentCount = async (req, res, next) => {
+  try {
+    const count = await Student.countDocuments();
+    res.status(200).json({ success: true, count });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.getInstitutionCount = async (req, res, next) => {
+  try {
+    const count = await Institution.countDocuments();
+    res.status(200).json({ success: true, count });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.getPendingTranscriptsCount = async (req, res, next) => {
+  try {
+    const count = await Student.countDocuments({ 'transcriptRequests.status': 'pending' });
+    res.status(200).json({ success: true, count });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.getPendingProgressCount = async (req, res, next) => {
+  try {
+    const count = await Institution.countDocuments({ 'requestedStudents.status': 'pending' });
+    res.status(200).json({ success: true, count });
+  } catch (err) {
+    next(err);
+  }
+};
+
+
+exports.getDashboardStats = async (req, res, next) => {
+  try {
+    const [studentsCount, institutionsCount, pendingTranscripts, pendingProgress] = await Promise.all([
+      Student.countDocuments(),
+      Institution.countDocuments(),
+      Student.countDocuments({ 'transcriptRequests.status': 'pending' }),
+      Institution.countDocuments({ 'requestedStudents.status': 'pending' })
+    ]);
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        students: studentsCount,
+        institutions: institutionsCount,
+        pendingTranscripts,
+        pendingProgress
+      }
+    });
   } catch (err) {
     next(err);
   }

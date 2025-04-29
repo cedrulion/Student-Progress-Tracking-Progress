@@ -23,6 +23,22 @@ const InstitutionStudents = () => {
 
     fetchStudents();
   }, []);
+  const handleRequestProgress = async (studentId) => {
+    try {
+      await axios.post(
+        'http://localhost:5000/api/institutions/request-progress',
+        { studentId },
+
+      );
+      toast.success('Progress request submitted successfully');
+      // Update the UI to show request is pending
+      setStudents(students.map(s => 
+        s._id === studentId ? {...s, requested: true, requestStatus: 'pending'} : s
+      ));
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to request progress');
+    }
+  };
 
   const filteredStudents = students.filter(student => {
     const searchLower = searchTerm.toLowerCase();
@@ -126,13 +142,26 @@ const InstitutionStudents = () => {
                           {student.program}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <Link
-                            to={`/institution/student-progress/${student._id}`}
+                        {student.requested ? (
+                          student.requestStatus === 'approved' ? (
+                            <Link
+                              to={`/institution/student-progress/${student._id}`}
+                              className="text-blue-600 hover:text-blue-900"
+                            >
+                              View Progress
+                            </Link>
+                          ) : (
+                            <span className="text-gray-400">Request pending</span>
+                          )
+                        ) : (
+                          <button
+                            onClick={() => handleRequestProgress(student._id)}
                             className="text-blue-600 hover:text-blue-900"
                           >
-                            View Progress
-                          </Link>
-                        </td>
+                            Request Progress
+                          </button>
+                        )}
+                      </td>
                       </tr>
                     ))}
                   </tbody>

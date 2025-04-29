@@ -18,6 +18,7 @@ import StudentTranscripts from './pages/student/Transcripts';
 import InstitutionProfile from './pages/institution/Profile';
 import InstitutionStudents from './pages/institution/Students';
 import InstitutionRequests from './pages/institution/Requests';
+import InstitutionStudentProgress from './pages/institution/StudentProgress';
 import AdminDashboard from './pages/admin/Dashboard';
 import AdminInstitutions from './pages/admin/Institutions';
 import AdminStudents from './pages/admin/Students';
@@ -55,6 +56,7 @@ function App() {
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="profile" element={<InstitutionProfile />} />
             <Route path="students" element={<InstitutionStudents />} />
+            <Route path="student-progress/:studentId" element={<InstitutionStudentProgress />} />
             <Route path="requests" element={<InstitutionRequests />} />
           </Route>
           

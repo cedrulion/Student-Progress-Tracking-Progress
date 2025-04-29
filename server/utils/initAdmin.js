@@ -1,8 +1,8 @@
 const User = require('../models/User');
 
 const initAdmin = async () => {
-  const email = 'admin@example.com';
-  const password = 'admin123'; // Use a strong password in production
+  const email = 'admin@ur.com';
+  const password = 'password'; // Use a strong password in production
   const role = 'admin';
 
   try {
