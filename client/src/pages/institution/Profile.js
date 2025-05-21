@@ -20,6 +20,8 @@ const InstitutionProfile = () => {
       try {
         const res = await axios.get('http://localhost:5000/api/institutions/profile');
         setProfile(res.data.data);
+        console.log(res.data.data);
+        
         setFormData({
           name: res.data.data.name,
           address: res.data.data.address,

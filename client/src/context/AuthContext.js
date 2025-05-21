@@ -114,7 +114,7 @@ export const AuthProvider = ({ children }) => {
         throw err;
       }
     }
-  };
+  }; 
 
   // Login user - completely revised for better token handling
   const login = async (formData) => {

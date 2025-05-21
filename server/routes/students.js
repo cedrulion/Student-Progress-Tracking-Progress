@@ -7,7 +7,8 @@ router.use(protect, authorize('student'));
 
 router.get('/profile', studentController.getProfile);
 router.put('/profile', studentController.updateProfile);
-router.post('/transcript-request', studentController.requestTranscript);
-router.get('/transcript-requests', studentController.getTranscriptRequests);
+router.get('/transcript', studentController.getStudentTranscript);
+router.get('/transcript/download', studentController.downloadTranscript);
+
 
 module.exports = router;

@@ -8,6 +8,7 @@ const StudentProgress = () => {
   const [student, setStudent] = useState(null);
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [editingCourseId, setEditingCourseId] = useState(null);
   const [formData, setFormData] = useState({
     code: '',
     name: '',
@@ -48,9 +49,26 @@ const StudentProgress = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`http://localhost:5000/api/admin/students/${studentId}/courses`, formData);
-      const res = await axios.get(`/api/admin/students/${studentId}/courses`);
+      if (editingCourseId) {
+        // Update existing course
+        await axios.put(
+          `http://localhost:5000/api/admin/students/${studentId}/courses/${editingCourseId}`,
+          formData
+        );
+        setEditingCourseId(null);
+      } else {
+        // Add new course
+        await axios.post(
+          `http://localhost:5000/api/admin/students/${studentId}/courses`, 
+          formData
+        );
+      }
+      
+      // Refresh course list
+      const res = await axios.get(`http://localhost:5000/api/admin/students/${studentId}/courses`);
       setCourses(res.data.data);
+      
+      // Reset form
       setFormData({
         code: '',
         name: '',
@@ -61,18 +79,50 @@ const StudentProgress = () => {
         isRetake: false
       });
     } catch (err) {
-      console.error('Failed to add course:', err);
+      console.error('Failed to save course:', err);
     }
+  };
+
+  const handleEdit = (course) => {
+    setEditingCourseId(course._id);
+    setFormData({
+      code: course.code,
+      name: course.name,
+      semester: course.semester,
+      yearTaken: course.yearTaken,
+      grade: course.grade,
+      credits: course.credits,
+      isRetake: course.isRetake
+    });
+    // Scroll to form
+    document.getElementById('course-form').scrollIntoView({ behavior: 'smooth' });
   };
 
   const handleDelete = async (courseId) => {
     try {
-      await axios.delete(`http://localhost:5000/api/admin/students/${studentId}/courses/${courseId}`);
-      const res = await axios.get(`http://localhost:5000/api/admin/students/${studentId}/courses`);
+      await axios.delete(
+        `http://localhost:5000/api/admin/students/${studentId}/courses/${courseId}`
+      );
+      const res = await axios.get(
+        `http://localhost:5000/api/admin/students/${studentId}/courses`
+      );
       setCourses(res.data.data);
     } catch (err) {
       console.error('Failed to delete course:', err);
     }
+  };
+
+  const cancelEdit = () => {
+    setEditingCourseId(null);
+    setFormData({
+      code: '',
+      name: '',
+      semester: 1,
+      yearTaken: new Date().getFullYear(),
+      grade: 'A',
+      credits: 3,
+      isRetake: false
+    });
   };
 
   if (loading) {
@@ -135,7 +185,13 @@ const StudentProgress = () => {
                             {course.grade}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                          <button
+                            onClick={() => handleEdit(course)}
+                            className="text-blue-600 hover:text-blue-900"
+                          >
+                            Edit
+                          </button>
                           <button
                             onClick={() => handleDelete(course._id)}
                             className="text-red-600 hover:text-red-900"
@@ -151,10 +207,12 @@ const StudentProgress = () => {
             </div>
           </div>
 
-          <div>
+          <div id="course-form">
             <div className="bg-white shadow overflow-hidden sm:rounded-lg">
               <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
-                <h3 className="text-lg leading-6 font-medium text-gray-900">Add New Course</h3>
+                <h3 className="text-lg leading-6 font-medium text-gray-900">
+                  {editingCourseId ? 'Edit Course' : 'Add New Course'}
+                </h3>
               </div>
               <div className="px-4 py-5 sm:p-6">
                 <form onSubmit={handleSubmit}>
@@ -275,13 +333,22 @@ const StudentProgress = () => {
                       </label>
                     </div>
 
-                    <div>
+                    <div className="flex space-x-3">
                       <button
                         type="submit"
-                        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        className="flex-1 justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                       >
-                        Add Course
+                        {editingCourseId ? 'Update Course' : 'Add Course'}
                       </button>
+                      {editingCourseId && (
+                        <button
+                          type="button"
+                          onClick={cancelEdit}
+                          className="flex-1 justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        >
+                          Cancel
+                        </button>
+                      )}
                     </div>
                   </div>
                 </form>

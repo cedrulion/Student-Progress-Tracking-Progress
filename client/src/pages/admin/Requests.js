@@ -1,10 +1,15 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import Modal from '../../components/ui/Modal';
+import Spinner from '../../components/ui/Spinner';
 
 const AdminRequests = () => {
   const [requests, setRequests] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [requestType, setRequestType] = useState('');
 
   useEffect(() => {
     const fetchRequests = async () => {
@@ -20,6 +25,12 @@ const AdminRequests = () => {
 
     fetchRequests();
   }, []);
+
+  const viewRequestDetails = (request, type) => {
+    setSelectedRequest(request);
+    setRequestType(type);
+    setIsModalOpen(true);
+  };
 
   const approveRequest = async (type, id, status) => {
     try {
@@ -37,13 +48,18 @@ const AdminRequests = () => {
         });
       }
       toast.success(`Request ${status} successfully`);
+      setIsModalOpen(false);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to update request');
     }
   };
 
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Spinner />
+      </div>
+    );
   }
 
   return (
@@ -117,16 +133,10 @@ const AdminRequests = () => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                             <button
-                              onClick={() => approveRequest('transcript', { student: request.student, request: request._id }, 'approved')}
-                              className="text-green-600 hover:text-green-900"
+                              onClick={() => viewRequestDetails(request, 'transcript')}
+                              className="text-blue-600 hover:text-blue-900"
                             >
-                              Approve
-                            </button>
-                            <button
-                              onClick={() => approveRequest('transcript', { student: request.student, request: request._id }, 'rejected')}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              Reject
+                              View Details
                             </button>
                           </td>
                         </tr>
@@ -169,40 +179,38 @@ const AdminRequests = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {requests.progressRequests.map((request) => (
-                        <tr key={request._id}>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">
-                              {request.institutionName}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">
-                              {request.student.firstName} {request.student.lastName}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {request.student.studentId}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {new Date(request.requestDate).toLocaleDateString()}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                            <button
-                              onClick={() => approveRequest('progress', { institution: request.institution, request: request._id }, 'approved')}
-                              className="text-green-600 hover:text-green-900"
-                            >
-                              Approve
-                            </button>
-                            <button
-                              onClick={() => approveRequest('progress', { institution: request.institution, request: request._id }, 'rejected')}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              Reject
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                    {requests.progressRequests.map((request) => (
+  <tr key={request._id}>
+    <td className="px-6 py-4 whitespace-nowrap">
+      <div className="text-sm font-medium text-gray-900">
+        {request.institutionName}
+      </div>
+    </td>
+    <td className="px-6 py-4 whitespace-nowrap">
+      <div className="text-sm font-medium text-gray-900">
+        {/* Check if student exists and display data safely */}
+        {request.student && request.student.firstName ? 
+          `${request.student.firstName} ${request.student.lastName}` : 
+          'N/A'}
+      </div>
+      <div className="text-sm text-gray-500">
+        {request.student && request.student.studentId ? 
+          request.student.studentId : 'N/A'}
+      </div>
+    </td>
+    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+      {new Date(request.requestDate).toLocaleDateString()}
+    </td>
+    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+      <button
+        onClick={() => viewRequestDetails(request, 'progress')}
+        className="text-blue-600 hover:text-blue-900"
+      >
+        View Details
+      </button>
+    </td>
+  </tr>
+))}
                     </tbody>
                   </table>
                 </div>
@@ -211,6 +219,141 @@ const AdminRequests = () => {
           </div>
         </div>
       </div>
+
+      {/* Request Details Modal */}
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+        {selectedRequest && (
+          <div className="p-6">
+            <h2 className="text-xl font-bold mb-4">
+              {requestType === 'transcript' ? 'Transcript' : 'Progress'} Request Details
+            </h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="font-medium text-gray-700 mb-2">Request Information</h3>
+                <div className="space-y-2">
+                  <p><span className="font-medium">Request ID:</span> {selectedRequest._id}</p>
+                  <p><span className="font-medium">Date:</span> {new Date(selectedRequest.requestDate).toLocaleString()}</p>
+                  <p><span className="font-medium">Status:</span> <span className="capitalize">{selectedRequest.status}</span></p>
+                </div>
+              </div>
+
+              {requestType === 'transcript' ? (
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h3 className="font-medium text-gray-700 mb-2">Transcript Details</h3>
+                  <div className="space-y-2">
+                    <p><span className="font-medium">Purpose:</span> {selectedRequest.purpose}</p>
+                    <p><span className="font-medium">Delivery Method:</span> {selectedRequest.deliveryMethod || 'N/A'}</p>
+                    <p><span className="font-medium">Recipient Email:</span> {selectedRequest.recipientEmail || 'N/A'}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h3 className="font-medium text-gray-700 mb-2">Progress Request Details</h3>
+                  <div className="space-y-2">
+                    <p><span className="font-medium">Purpose:</span> {selectedRequest.purpose}</p>
+                    <p><span className="font-medium">Justification:</span> {selectedRequest.justification}</p>
+                    <p>
+                      <span className="font-medium">Requested Data:</span> 
+                      {selectedRequest.requestedData?.join(', ') || 'N/A'}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="font-medium text-gray-700 mb-2">
+                  {requestType === 'transcript' ? 'Student' : 'Institution'} Information
+                </h3>
+                <div className="space-y-2">
+                  {requestType === 'transcript' ? (
+                    <>
+                      <p><span className="font-medium">Name:</span> {selectedRequest.studentName}</p>
+                      <p><span className="font-medium">ID:</span> {selectedRequest.studentId}</p>
+                      <p><span className="font-medium">Program:</span> {selectedRequest.student?.program || 'N/A'}</p>
+                    </>
+                  ) : (
+                    <>
+                      <p><span className="font-medium">Institution:</span> {selectedRequest.institutionName}</p>
+                      <p><span className="font-medium">Contact Email:</span> {selectedRequest.contactEmail || 'N/A'}</p>
+                      <p><span className="font-medium">Verification Status:</span> {selectedRequest.verificationStatus || 'N/A'}</p>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="font-medium text-gray-700 mb-2">
+                  {requestType === 'transcript' ? 'Institution' : 'Student'} Information
+                </h3>
+                <div className="space-y-2">
+                  {requestType === 'transcript' ? (
+                    <>
+                      <p><span className="font-medium">Name:</span> {selectedRequest.institution?.name || 'N/A'}</p>
+                      <p><span className="font-medium">Contact:</span> {selectedRequest.institution?.contactPhone || 'N/A'}</p>
+                    </>
+                  ) : (
+                    <>
+                      <p><span className="font-medium">Student Name:</span> {selectedRequest.student.firstName} {selectedRequest.student?.lastName}</p>
+                      <p><span className="font-medium">Student ID:</span> {selectedRequest.student?.studentId}</p>
+                      <p><span className="font-medium">Program:</span> {selectedRequest.student?.program || 'N/A'}</p>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {requestType === 'progress' && selectedRequest.consentForm && (
+              <div className="bg-gray-50 p-4 rounded-lg mb-6">
+                <h3 className="font-medium text-gray-700 mb-2">Consent Form</h3>
+                <a 
+                  href={selectedRequest.consentForm} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline"
+                >
+                  View Consent Form
+                </a>
+              </div>
+            )}
+
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => approveRequest(
+                  requestType,
+                  requestType === 'transcript' 
+                    ? { student: selectedRequest.student, request: selectedRequest._id }
+                    : { institution: selectedRequest.institution, request: selectedRequest._id },
+                  'rejected'
+                )}
+                className="px-4 py-2 border border-transparent rounded-md text-white bg-red-600 hover:bg-red-700"
+              >
+                Reject
+              </button>
+              <button
+                onClick={() => approveRequest(
+                  requestType,
+                  requestType === 'transcript' 
+                    ? { student: selectedRequest.student, request: selectedRequest._id }
+                    : { institution: selectedRequest.institution, request: selectedRequest._id },
+                  'approved'
+                )}
+                className="px-4 py-2 border border-transparent rounded-md text-white bg-green-600 hover:bg-green-700"
+              >
+                Approve
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

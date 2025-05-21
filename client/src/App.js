@@ -21,10 +21,12 @@ import InstitutionRequests from './pages/institution/Requests';
 import InstitutionStudentProgress from './pages/institution/StudentProgress';
 import AdminDashboard from './pages/admin/Dashboard';
 import AdminInstitutions from './pages/admin/Institutions';
+import ApprovedProgressTable from './pages/admin/ApprovedProgressTable';
 import AdminStudents from './pages/admin/Students';
 import AdminRequests from './pages/admin/Requests';
 import AdminTranscripts from './pages/admin/Transcripts';
 import StudentProgress from './pages/admin/StudentProgress';
+import StudentRequestForm from './pages/institution/StudentRequestForm';
 
 // Components
 import Navbar from './components/layout/Navbar';
@@ -56,6 +58,7 @@ function App() {
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="profile" element={<InstitutionProfile />} />
             <Route path="students" element={<InstitutionStudents />} />
+            <Route path="/institution/request-progress/:studentId" element={<StudentRequestForm />} />
             <Route path="student-progress/:studentId" element={<InstitutionStudentProgress />} />
             <Route path="requests" element={<InstitutionRequests />} />
           </Route>
@@ -66,6 +69,7 @@ function App() {
             <Route path="institutions" element={<AdminInstitutions />} />
             <Route path="students" element={<AdminStudents />} />
             <Route path="requests" element={<AdminRequests />} />
+            <Route path='approved' element={<ApprovedProgressTable />} />
             <Route path="students/:studentId/progress" element={<StudentProgress />} />
             <Route path="transcripts" element={<AdminTranscripts />} />
           </Route>

@@ -1,11 +1,17 @@
 const Institution = require('../models/Institution');
 const Student = require('../models/Student');
 
+// Helper function to get user ID consistently
+const getUserId = (user) => {
+  return user._id || user.id;
+};
+
 // Get institution profile
 exports.getProfile = async (req, res, next) => {
   console.log('User making request:', req.user);
   try {
-    const institution = await Institution.findOne({ userId: req.user.id }).populate('userId');
+    const userId = getUserId(req.user);
+    const institution = await Institution.findOne({ userId: userId }).populate('userId');
     if (!institution) {
       return res.status(404).json({ success: false, message: 'Institution not found' });
     }
@@ -19,8 +25,9 @@ exports.getProfile = async (req, res, next) => {
 // Update institution profile
 exports.updateProfile = async (req, res, next) => {
   try {
+    const userId = getUserId(req.user);
     const institution = await Institution.findOneAndUpdate(
-      { userId: req.user.id },
+      { userId: userId },
       req.body,
       { new: true, runValidators: true }
     ).populate('userId');
@@ -38,9 +45,12 @@ exports.updateProfile = async (req, res, next) => {
 // Request student progress
 exports.requestStudentProgress = async (req, res, next) => {
   try {
-    const { studentId } = req.body;
+    const { studentId } = req.params;
     
-    const institution = await Institution.findOne({ userId: req.user.id });
+    // Get user ID consistently
+    const userId = getUserId(req.user);
+    
+    const institution = await Institution.findOne({ userId: userId });
     if (!institution) {
       return res.status(404).json({ success: false, message: 'Institution not found' });
     }
@@ -71,7 +81,22 @@ exports.requestStudentProgress = async (req, res, next) => {
       });
     }
     
-    institution.requestedStudents.push({ student: studentId });
+    // Create new request with data from FormData
+    const newRequest = {
+      student: studentId,
+      purpose: req.body.purpose,
+      justification: req.body.justification,
+      requestedData: Array.isArray(req.body.requestedData) 
+        ? req.body.requestedData 
+        : [req.body.requestedData].filter(Boolean)
+    };
+    
+    // Handle file upload if exists
+    if (req.file) {
+      newRequest.consentForm = req.file.path;
+    }
+    
+    institution.requestedStudents.push(newRequest);
     await institution.save();
     
     res.status(201).json({ success: true, data: institution });
@@ -85,7 +110,8 @@ exports.getStudentProgress = async (req, res, next) => {
   try {
     const { studentId } = req.params;
     
-    const institution = await Institution.findOne({ userId: req.user.id });
+    const userId = getUserId(req.user);
+    const institution = await Institution.findOne({ userId: userId });
     if (!institution) {
       return res.status(404).json({ success: false, message: 'Institution not found' });
     }
@@ -126,8 +152,10 @@ exports.getAllStudents = async (req, res, next) => {
 // Get institution's requests
 exports.getRequests = async (req, res, next) => {
   try {
-    const institution = await Institution.findOne({ userId: req.user.id })
-      .populate('requestedStudents.student', 'firstName lastName studentId');
+    const userId = getUserId(req.user);
+    const institution = await Institution.findOne({ userId: userId })
+      // Populate more student fields to ensure data is available
+      .populate('requestedStudents.student', 'firstName lastName studentId department program');
     
     if (!institution) {
       return res.status(404).json({ success: false, message: 'Institution not found' });

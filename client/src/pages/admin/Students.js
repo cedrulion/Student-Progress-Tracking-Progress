@@ -6,6 +6,15 @@ const AdminStudents = () => {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [editingStudent, setEditingStudent] = useState(null);
+  const [editFormData, setEditFormData] = useState({
+    firstName: '',
+    lastName: '',
+    studentId: '',
+    department: '',
+    program: '',
+    gpa: ''
+  });
 
   useEffect(() => {
     const fetchStudents = async () => {
@@ -21,6 +30,70 @@ const AdminStudents = () => {
 
     fetchStudents();
   }, []);
+
+  const handleEditClick = (student) => {
+    setEditingStudent(student._id);
+    setEditFormData({
+      firstName: student.firstName,
+      lastName: student.lastName,
+      studentId: student.studentId,
+      department: student.department,
+      program: student.program,
+      gpa: student.gpa.toString()
+    });
+  };
+
+  const handleEditFormChange = (e) => {
+    const { name, value } = e.target;
+    setEditFormData({
+      ...editFormData,
+      [name]: value
+    });
+  };
+
+  const handleCancelClick = () => {
+    setEditingStudent(null);
+  };
+
+  const handleUpdateStudent = async (studentId) => {
+    try {
+      const res = await axios.put(
+        `http://localhost:5000/api/admin/students/${studentId}`,
+        editFormData
+      );
+      
+      setStudents(students.map(student => 
+        student._id === studentId ? res.data.data : student
+      ));
+      setEditingStudent(null);
+    } catch (err) {
+      console.error('Failed to update student:', err);
+    }
+  };
+
+  const handleDownloadTranscript = async (studentId) => {
+    try {
+      const response = await axios.get(
+        `http://localhost:5000/api/admin/students/${studentId}/transcript`,
+        { responseType: 'blob' }
+      );
+      
+      // Create blob link to download
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `transcript_${studentId}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      
+      // Clean up
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to download transcript:', err);
+      alert('Failed to download transcript');
+    }
+  };
 
   const filteredStudents = students.filter(student => {
     const searchLower = searchTerm.toLowerCase();
@@ -39,16 +112,6 @@ const AdminStudents = () => {
   return (
     <div className="py-6">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="md:flex md:items-center md:justify-between mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Manage Students</h1>
-          <Link
-            to="/admin/students/add"
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
-          >
-            Add New Student
-          </Link>
-        </div>
-
         <div className="mb-4">
           <input
             type="text"
@@ -75,33 +138,115 @@ const AdminStudents = () => {
               {filteredStudents.map((student) => (
                 <tr key={student._id}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {student.studentId}
+                    {editingStudent === student._id ? (
+                      <input
+                        type="text"
+                        name="studentId"
+                        value={editFormData.studentId}
+                        onChange={handleEditFormChange}
+                        className="w-full px-2 py-1 border border-gray-300 rounded"
+                      />
+                    ) : (
+                      student.studentId
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {student.firstName} {student.lastName}
+                    {editingStudent === student._id ? (
+                      <div className="flex space-x-2">
+                        <input
+                          type="text"
+                          name="firstName"
+                          value={editFormData.firstName}
+                          onChange={handleEditFormChange}
+                          className="w-full px-2 py-1 border border-gray-300 rounded"
+                        />
+                        <input
+                          type="text"
+                          name="lastName"
+                          value={editFormData.lastName}
+                          onChange={handleEditFormChange}
+                          className="w-full px-2 py-1 border border-gray-300 rounded"
+                        />
+                      </div>
+                    ) : (
+                      `${student.firstName} ${student.lastName}`
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {student.department}
+                    {editingStudent === student._id ? (
+                      <input
+                        type="text"
+                        name="department"
+                        value={editFormData.department}
+                        onChange={handleEditFormChange}
+                        className="w-full px-2 py-1 border border-gray-300 rounded"
+                      />
+                    ) : (
+                      student.department
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {student.program}
+                    {editingStudent === student._id ? (
+                      <input
+                        type="text"
+                        name="program"
+                        value={editFormData.program}
+                        onChange={handleEditFormChange}
+                        className="w-full px-2 py-1 border border-gray-300 rounded"
+                      />
+                    ) : (
+                      student.program
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {student.gpa.toFixed(2)}
+                    {editingStudent === student._id ? (
+                      <input
+                        type="number"
+                        name="gpa"
+                        step="0.01"
+                        min="0"
+                        max="4"
+                        value={editFormData.gpa}
+                        onChange={handleEditFormChange}
+                        className="w-full px-2 py-1 border border-gray-300 rounded"
+                      />
+                    ) : (
+                      student.gpa.toFixed(2)
+                    )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <Link
-                      to={`/admin/students/${student._id}`}
-                      className="text-blue-600 hover:text-blue-900 mr-4"
-                    >
-                      Edit
-                    </Link>
-                    <Link
-                      to={`/admin/students/${student._id}/progress`}
-                      className="text-green-600 hover:text-green-900"
-                    >
-                      Add Progress
-                    </Link>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                    {editingStudent === student._id ? (
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleUpdateStudent(student._id)}
+                          className="text-green-600 hover:text-green-900"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={handleCancelClick}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+
+                        <Link
+                          to={`/admin/students/${student._id}/progress`}
+                          className="text-green-600 hover:text-green-900"
+                        >
+                          View Progress
+                        </Link>
+                        <button
+                          onClick={() => handleDownloadTranscript(student._id)}
+                          className="text-purple-600 hover:text-purple-900"
+                        >
+                          Transcript
+                        </button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}
