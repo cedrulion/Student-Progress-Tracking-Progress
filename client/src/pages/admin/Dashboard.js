@@ -100,7 +100,7 @@ const AdminDashboard = () => {
                   </svg>
                 </div>
                 <div className="ml-5 w-0 flex-1">
-                  <h3 className="text-lg font-medium text-gray-900">Pending Transcripts</h3>
+                  <h3 className="text-lg font-medium text-gray-900">Transcripts</h3>
                   <p className="mt-1 text-3xl font-semibold text-gray-900">{stats.pendingTranscripts}</p>
                 </div>
               </div>
@@ -116,49 +116,50 @@ const AdminDashboard = () => {
 
           {/* Pending Progress Card */}
           <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="px-4 py-5 sm:p-6">
-              <div className="flex items-center">
-                <div className="flex-shrink-0 bg-purple-500 rounded-md p-3">
-                  <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <h3 className="text-lg font-medium text-gray-900">Pending Progress</h3>
-                  <p className="mt-1 text-3xl font-semibold text-gray-900">{stats.pendingProgress}</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-gray-50 px-4 py-4 sm:px-6">
-              <div className="text-sm">
-                <Link to="/admin/requests" className="font-medium text-blue-600 hover:text-blue-500">
-                  Review requests<span aria-hidden="true"> &rarr;</span>
-                </Link>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="px-4 py-5 sm:p-6">
-              <div className="flex items-center">
-                <div className="flex-shrink-0 bg-purple-500 rounded-md p-3">
-                  <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <h3 className="text-lg font-medium text-gray-900">Approved Request</h3>
-                  <p className="mt-1 text-3xl font-semibold text-gray-900">{stats.pendingProgress}</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-gray-50 px-4 py-4 sm:px-6">
-              <div className="text-sm">
-                <Link to="/admin/approved" className="font-medium text-blue-600 hover:text-blue-500">
-                  approved requests<span aria-hidden="true"> &rarr;</span>
-                </Link>
-              </div>
-            </div>
-          </div>
+  <div className="px-4 py-5 sm:p-6">
+    <div className="flex items-center">
+      <div className="flex-shrink-0 bg-purple-500 rounded-md p-3">
+        <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </div>
+      <div className="ml-5 w-0 flex-1">
+        <h3 className="text-lg font-medium text-gray-900">Pending Progress</h3>
+        <p className="mt-1 text-3xl font-semibold text-gray-900">{stats.pendingProgress}</p>
+      </div>
+    </div>
+  </div>
+  <div className="bg-gray-50 px-4 py-4 sm:px-6">
+    <div className="text-sm">
+      <Link to="/admin/requests" className="font-medium text-blue-600 hover:text-blue-500">
+        Review requests<span aria-hidden="true"> &rarr;</span>
+      </Link>
+    </div>
+  </div>
+</div>
+
+<div className="bg-white overflow-hidden shadow rounded-lg">
+  <div className="px-4 py-5 sm:p-6">
+    <div className="flex items-center">
+      <div className="flex-shrink-0 bg-purple-500 rounded-md p-3">
+        <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </div>
+      <div className="ml-5 w-0 flex-1">
+        <h3 className="text-lg font-medium text-gray-900">Approved Request</h3>
+        <p className="mt-1 text-3xl font-semibold text-gray-900">{stats.pendingProgress}</p>
+      </div>
+    </div>
+  </div>
+  <div className="bg-gray-50 px-4 py-4 sm:px-6">
+    <div className="text-sm">
+      <Link to="/admin/approved" className="font-medium text-blue-600 hover:text-blue-500">
+        Approved requests<span aria-hidden="true"> &rarr;</span>
+      </Link>
+    </div>
+  </div>
+</div>
         </div>
       </div>
     </div>

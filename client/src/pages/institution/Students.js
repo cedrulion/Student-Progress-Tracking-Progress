@@ -36,7 +36,7 @@ const InstitutionStudents = () => {
     e.preventDefault();
     setSearching(true);
     setError(null);
-    
+
     // Simulating a search API call with a delay
     setTimeout(() => {
       if (!searchTerm.trim()) {
@@ -47,14 +47,14 @@ const InstitutionStudents = () => {
       }
 
       // Filter students by student ID
-      const results = students.filter(student => 
+      const results = students.filter(student =>
         student.studentId.toLowerCase().includes(searchTerm.toLowerCase())
       );
-      
+
       if (results.length === 0) {
         setError('No student found with that ID');
       }
-      
+
       setSearchedStudents(results);
       setSearching(false);
     }, 800);
@@ -68,9 +68,9 @@ const InstitutionStudents = () => {
         { studentId }
       );
       toast.success('Progress request submitted successfully');
-      
+
       // Update the UI to show request is pending
-      setSearchedStudents(searchedStudents.map(s => 
+      setSearchedStudents(searchedStudents.map(s =>
         s._id === studentId ? {...s, requested: true, requestStatus: 'pending'} : s
       ));
     } catch (err) {
@@ -131,7 +131,7 @@ const InstitutionStudents = () => {
                 {searching ? <Spinner size="sm" /> : 'Search'}
               </button>
             </form>
-            
+
             {error && (
               <div className="mt-4">
                 <Alert type="error" message={error} />
@@ -205,26 +205,21 @@ const InstitutionStudents = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           {loading && student._id === student._id ? (
                             <Spinner size="sm" />
-                          ) : student.requested ? (
-                            student.requestStatus === 'approved' ? (
-                              <Link
-                                to={`/institution/student-progress/${student._id}`}
-                                className="text-blue-600 hover:text-blue-900"
-                              >
-                                View Progress
-                              </Link>
-                            ) : (
-                              <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                                Request Pending
-                              </span>
-                            )
                           ) : (
-                            <button
-                            onClick={() => navigate(`/institution/request-progress/${student._id}`)}
-  className="text-blue-600 hover:text-blue-900 font-medium"
->
-  Request Progress
-</button>
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => navigate(`/institution/request-progress/${student._id}`)}
+                                className="text-blue-600 hover:text-blue-900 font-medium"
+                              >
+                                Request Progress
+                              </button>
+                              <button
+                                onClick={() => navigate(`/institution/request-transcript/${student._id}`)}
+                                className="text-purple-600 hover:text-purple-900 font-medium"
+                              >
+                                Request Transcript
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -240,17 +235,17 @@ const InstitutionStudents = () => {
         {!searching && searchedStudents.length === 0 && !error && (
           <div className="mt-8 bg-white shadow overflow-hidden rounded-lg">
             <div className="px-4 py-12 text-center">
-              <svg 
-                className="mx-auto h-12 w-12 text-gray-400" 
-                fill="none" 
-                stroke="currentColor" 
+              <svg
+                className="mx-auto h-12 w-12 text-gray-400"
+                fill="none"
+                stroke="currentColor"
                 viewBox="0 0 24 24"
               >
-                <path 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round" 
-                  strokeWidth="2" 
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" 
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
                 />
               </svg>
               <h3 className="mt-2 text-sm font-medium text-gray-900">No students searched</h3>

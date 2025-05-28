@@ -27,6 +27,8 @@ import AdminRequests from './pages/admin/Requests';
 import AdminTranscripts from './pages/admin/Transcripts';
 import StudentProgress from './pages/admin/StudentProgress';
 import StudentRequestForm from './pages/institution/StudentRequestForm';
+import RequestTranscriptForm from './pages/institution/RequestTranscriptForm';
+import InstitutionTranscriptRequests from './pages/institution/InstitutionTranscriptRequests';
 
 // Components
 import Navbar from './components/layout/Navbar';
@@ -58,9 +60,11 @@ function App() {
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="profile" element={<InstitutionProfile />} />
             <Route path="students" element={<InstitutionStudents />} />
+            <Route path="/institution/request-transcript/:studentId" element={<RequestTranscriptForm />} />
             <Route path="/institution/request-progress/:studentId" element={<StudentRequestForm />} />
             <Route path="student-progress/:studentId" element={<InstitutionStudentProgress />} />
             <Route path="requests" element={<InstitutionRequests />} />
+            <Route path="/institution/transcript-requests" element={<InstitutionTranscriptRequests />} />
           </Route>
           
           {/* Admin routes */}

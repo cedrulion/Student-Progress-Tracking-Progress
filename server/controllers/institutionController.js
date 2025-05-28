@@ -166,3 +166,244 @@ exports.getRequests = async (req, res, next) => {
     next(err);
   }
 };
+exports.requestStudentTranscript = async (req, res, next) => {
+  try {
+    const { studentId } = req.params;
+    const { purpose, justification } = req.body;
+
+    const userId = getUserId(req.user);
+    const institution = await Institution.findOne({ userId: userId });
+
+    if (!institution) {
+      return res.status(404).json({ success: false, message: 'Institution not found' });
+    }
+
+    if (institution.verificationStatus !== 'verified') {
+      return res.status(403).json({
+        success: false,
+        message: 'Your institution needs to be verified first to request transcripts.'
+      });
+    }
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
+
+    // Check if transcript request already exists and is pending or approved
+    const existingTranscriptRequest = institution.transcriptRequests.find(
+      req => req.student.toString() === studentId && (req.status === 'pending' || req.status === 'approved')
+    );
+
+    if (existingTranscriptRequest) {
+      return res.status(400).json({
+        success: false,
+        message: 'A transcript request for this student is already pending or approved.'
+      });
+    }
+
+    const newTranscriptRequest = {
+      student: studentId,
+      purpose,
+      justification,
+    };
+
+    if (req.file) { // Assuming a consent form might be uploaded for transcripts too
+      newTranscriptRequest.consentForm = req.file.path;
+    }
+
+    institution.transcriptRequests.push(newTranscriptRequest);
+    await institution.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Transcript request submitted successfully. Awaiting admin approval.',
+      data: newTranscriptRequest
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};
+
+// NEW: Get Institution's Transcript Requests
+exports.getInstitutionTranscriptRequests = async (req, res, next) => {
+  try {
+    const userId = getUserId(req.user);
+    const institution = await Institution.findOne({ userId: userId })
+      .populate('transcriptRequests.student', 'firstName lastName studentId program department');
+
+    if (!institution) {
+      return res.status(404).json({ success: false, message: 'Institution not found' });
+    }
+
+    res.status(200).json({ success: true, data: institution.transcriptRequests });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// NEW: Download Approved Student Transcript
+exports.downloadApprovedStudentTranscript = async (req, res, next) => {
+  try {
+    const { studentId } = req.params;
+    const userId = getUserId(req.user);
+
+    const institution = await Institution.findOne({ userId: userId });
+    if (!institution) {
+      return res.status(404).json({ success: false, message: 'Institution not found' });
+    }
+
+    // Check if there's an approved transcript request for this student
+    const approvedRequest = institution.transcriptRequests.find(
+      req => req.student.toString() === studentId && req.status === 'approved'
+    );
+
+    if (!approvedRequest) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have an approved transcript request for this student.'
+      });
+    }
+
+    // Reuse the logic from the studentController's downloadTranscript function
+    // You might want to abstract this PDF generation into a helper for reusability.
+    const student = await Student.findById(studentId).populate('userId');
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
+
+    // Sort courses by year and semester
+    const sortedCourses = [...student.courses].sort((a, b) => {
+      if (a.yearTaken !== b.yearTaken) return a.yearTaken - b.yearTaken;
+      return a.semester - b.semester;
+    });
+
+    // Calculate GPA
+    const gradePoints = { 'A': 4, 'B': 3, 'C': 2, 'D': 1, 'E': 0.5, 'F': 0 };
+    let totalPoints = 0;
+    let totalCredits = 0;
+
+    student.courses.forEach(course => {
+      totalPoints += gradePoints[course.grade] * course.credits;
+      totalCredits += course.credits;
+    });
+
+    const gpa = totalCredits > 0 ? (totalPoints / totalCredits).toFixed(2) : 0;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Transcript - ${student.firstName} ${student.lastName}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+          .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+          .student-info { margin-bottom: 30px; }
+          .student-info table { width: 100%; border-collapse: collapse; }
+          .student-info td { padding: 5px; border: 1px solid #ddd; }
+          .course-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+          .course-table th, .course-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+          .course-table th { background-color: #f2f2f2; }
+          .footer { text-align: right; margin-top: 30px; font-style: italic; }
+          .gpa { font-weight: bold; margin-top: 20px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>OFFICIAL TRANSCRIPT</h1>
+          <h2>${student.institution ? student.institution.name : 'University Name'}</h2>
+        </div>
+        
+        <div class="student-info">
+          <table>
+            <tr>
+              <td><strong>Student Name:</strong></td>
+              <td>${student.firstName} ${student.lastName}</td>
+              <td><strong>Student ID:</strong></td>
+              <td>${student.studentId}</td>
+            </tr>
+            <tr>
+              <td><strong>Program:</strong></td>
+              <td>${student.program || 'N/A'}</td>
+              <td><strong>Department:</strong></td>
+              <td>${student.department || 'N/A'}</td>
+            </tr>
+            <tr>
+              <td><strong>Date of Birth:</strong></td>
+              <td>${student.dateOfBirth ? new Date(student.dateOfBirth).toLocaleDateString() : 'N/A'}</td>
+              <td><strong>Date Issued:</strong></td>
+              <td>${new Date().toLocaleDateString()}</td>
+            </tr>
+          </table>
+        </div>
+        
+        <table class="course-table">
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Course Name</th>
+              <th>Semester</th>
+              <th>Year</th>
+              <th>Credits</th>
+              <th>Grade</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sortedCourses.map(course => `
+              <tr>
+                <td>${course.code}</td>
+                <td>${course.name}</td>
+                <td>${course.semester}</td>
+                <td>${course.yearTaken}</td>
+                <td>${course.credits}</td>
+                <td>${course.grade}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        
+        <div class="gpa">
+          Cumulative GPA: ${gpa}
+        </div>
+        
+        <div class="footer">
+          <p>This is an official document. Any alteration makes it invalid.</p>
+          <p>Registrar's Signature: _________________________</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    // PDF options
+    const options = {
+      format: 'Letter',
+      border: {
+        top: '0.5in',
+        right: '0.5in',
+        bottom: '0.5in',
+        left: '0.5in'
+      }
+    };
+
+    // Generate PDF
+    pdf.create(html, options).toBuffer((err, buffer) => {
+      if (err) {
+        console.error('PDF generation error:', err);
+        return next(err);
+      }
+      
+      res.set({
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename=transcript_${student.studentId}.pdf`,
+        'Content-Length': buffer.length
+      });
+      
+      res.send(buffer);
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};

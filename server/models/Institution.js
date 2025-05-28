@@ -29,7 +29,6 @@ const institutionSchema = new mongoose.Schema({
   institutionType: {
     type: String,
     enum: ['university', 'college', 'school', 'employer', 'government', 'other'],
-  
   },
   description: {
     type: String
@@ -40,7 +39,7 @@ const institutionSchema = new mongoose.Schema({
     default: 'pending'
   },
   verificationDocuments: [String],
-  requestedStudents: [{
+  requestedStudents: [{ 
     student: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Student'
@@ -56,19 +55,45 @@ const institutionSchema = new mongoose.Schema({
     },
     purpose: {
       type: String,
-     
     },
     justification: {
       type: String,
-      
     },
     requestedData: [{
       type: String,
-      enum: ['academic_records', 'transcripts', 'attendance', 'grades', 'personal_info'],
-      
+      enum: ['academic_records'], 
     }],
     consentForm: {
-      type: String // Path to uploaded consent form if required
+      type: String 
+    }
+  }],
+  
+  transcriptRequests: [{
+    student: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Student',
+      required: true
+    },
+    requestDate: {
+      type: Date,
+      default: Date.now
+    },
+    status: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'pending'
+    },
+    purpose: {
+      type: String,
+      required: true
+    },
+    justification: {
+      type: String,
+      required: true
+    },
+
+    consentForm: {
+      type: String 
     }
   }]
 }, {

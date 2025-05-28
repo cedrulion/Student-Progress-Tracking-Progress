@@ -17,10 +17,7 @@ const StudentRequestForm = () => {
 
   const dataOptions = [
     { id: 'academic_records', name: 'Academic Records' },
-    { id: 'transcripts', name: 'Transcripts' },
-    { id: 'attendance', name: 'Attendance Records' },
-    { id: 'grades', name: 'Grades' },
-    { id: 'personal_info', name: 'Basic Personal Information' },
+
   ];
 
   const handleChange = (e) => {

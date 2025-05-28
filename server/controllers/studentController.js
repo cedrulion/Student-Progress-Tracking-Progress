@@ -1,5 +1,6 @@
 const Student = require('../models/Student');
 const Institution = require('../models/Institution');
+const pdf = require('html-pdf'); 
 
 // Get student profile
 exports.getProfile = async (req, res, next) => {

@@ -1,76 +1,114 @@
 const Student = require('../models/Student');
 const Institution = require('../models/Institution');
 const User = require('../models/User');
-const pdf = require('html-pdf');
+const pdf = require('html-pdf'); 
 const fs = require('fs');
 const path = require('path');
+
+const getUserId = (user) => {
+  return user._id || user.id;
+};
 
 // Verify institution
 exports.verifyInstitution = async (req, res, next) => {
   try {
     const { institutionId } = req.params;
-    const { status } = req.body;
-    
+    const { status } = req.body; // 'verified' or 'rejected'
+
+    if (!['verified', 'rejected'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid verification status provided.' });
+    }
+
     const institution = await Institution.findById(institutionId);
     if (!institution) {
       return res.status(404).json({ success: false, message: 'Institution not found' });
     }
-    
+
     institution.verificationStatus = status;
     await institution.save();
-    
+
     res.status(200).json({ success: true, data: institution });
   } catch (err) {
     next(err);
   }
 };
 
-// Approve student transcript request
-exports.approveTranscriptRequest = async (req, res, next) => {
+// NEW: Approve/Reject an Institution's Transcript Request
+// This now correctly targets the transcriptRequests array on the Institution model
+exports.respondToTranscriptRequest = async (req, res, next) => {
   try {
-    const { studentId, requestId } = req.params;
-    const { status } = req.body;
-    
-    const student = await Student.findById(studentId);
-    if (!student) {
-      return res.status(404).json({ success: false, message: 'Student not found' });
+    const { institutionId, requestId } = req.params;
+    const { status } = req.body; // 'approved' or 'rejected'
+
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status provided. Must be "approved" or "rejected".' });
     }
-    
-    const request = student.transcriptRequests.id(requestId);
-    if (!request) {
-      return res.status(404).json({ success: false, message: 'Request not found' });
+
+    const institution = await Institution.findById(institutionId);
+    if (!institution) {
+      return res.status(404).json({ success: false, message: 'Institution not found.' });
     }
-    
-    request.status = status;
-    await student.save();
-    
-    res.status(200).json({ success: true, data: student });
+
+    const transcriptRequest = institution.transcriptRequests.id(requestId);
+    if (!transcriptRequest) {
+      return res.status(404).json({ success: false, message: 'Transcript request not found within this institution.' });
+    }
+
+    // Only allow status change if it's currently pending
+    if (transcriptRequest.status !== 'pending') {
+      return res.status(400).json({ success: false, message: `Request is already ${transcriptRequest.status}.` });
+    }
+
+    transcriptRequest.status = status;
+    // Optional: Add a processedAt timestamp
+    transcriptRequest.processedAt = new Date();
+    await institution.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Transcript request for student ${transcriptRequest.student} by ${institution.name} has been ${status}.`,
+      data: transcriptRequest
+    });
+
   } catch (err) {
+    console.error('Error responding to transcript request:', err);
     next(err);
   }
 };
+
 
 // Approve institution's student progress request
 exports.approveProgressRequest = async (req, res, next) => {
   try {
     const { institutionId, requestId } = req.params;
-    const { status } = req.body;
-    
+    const { status } = req.body; // 'approved' or 'rejected'
+
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status provided. Must be "approved" or "rejected".' });
+    }
+
     const institution = await Institution.findById(institutionId);
     if (!institution) {
       return res.status(404).json({ success: false, message: 'Institution not found' });
     }
-    
+
     const request = institution.requestedStudents.id(requestId);
     if (!request) {
-      return res.status(404).json({ success: false, message: 'Request not found' });
+      return res.status(404).json({ success: false, message: 'Progress request not found.' });
     }
-    
+
+    // Only allow status change if it's currently pending
+    if (request.status !== 'pending') {
+      return res.status(400).json({ success: false, message: `Progress request is already ${request.status}.` });
+    }
+
     request.status = status;
+    request.processedAt = new Date(); // Add processedAt timestamp
     await institution.save();
-    
+
     res.status(200).json({ success: true, data: institution });
   } catch (err) {
+    console.error('Error approving progress request:', err);
     next(err);
   }
 };
@@ -78,7 +116,7 @@ exports.approveProgressRequest = async (req, res, next) => {
 // Get all institutions
 exports.getAllInstitutions = async (req, res, next) => {
   try {
-    const institutions = await Institution.find().populate('userId');
+    const institutions = await Institution.find().populate('userId', 'email role'); // Populate user info
     res.status(200).json({ success: true, data: institutions });
   } catch (err) {
     next(err);
@@ -88,7 +126,7 @@ exports.getAllInstitutions = async (req, res, next) => {
 // Get all students
 exports.getAllStudents = async (req, res, next) => {
   try {
-    const students = await Student.find().populate('userId');
+    const students = await Student.find().populate('userId', 'email role'); // Populate user info
     res.status(200).json({ success: true, data: students });
   } catch (err) {
     next(err);
@@ -98,7 +136,7 @@ exports.getAllStudents = async (req, res, next) => {
 // Get student by ID
 exports.getStudentById = async (req, res, next) => {
   try {
-    const student = await Student.findById(req.params.id).populate('userId');
+    const student = await Student.findById(req.params.id).populate('userId', 'email role');
     if (!student) {
       return res.status(404).json({ success: false, message: 'Student not found' });
     }
@@ -157,58 +195,68 @@ exports.deleteStudentCourse = async (req, res, next) => {
   }
 };
 
-// Get all pending requests
+// Get all pending requests (transcript and progress)
 exports.getPendingRequests = async (req, res, next) => {
   try {
-    // Get transcript requests
-    const students = await Student.find().populate({
-      path: 'transcriptRequests',
-      match: { status: 'pending' },
-      populate: { path: 'institution' }
-    });
-    
+    // Get transcript requests from Institutions
+    const institutionsWithPendingTranscripts = await Institution.find({
+      'transcriptRequests.status': 'pending'
+    }).populate('transcriptRequests.student', 'firstName lastName studentId program department');
+
     const transcriptRequests = [];
-    
-    students.forEach(student => {
-      student.transcriptRequests.forEach(request => {
-        if (request.status === 'pending') {
+    institutionsWithPendingTranscripts.forEach(institution => {
+      institution.transcriptRequests.forEach(request => {
+        if (request.status === 'pending' && request.student) { // Ensure student data is populated
           transcriptRequests.push({
             _id: request._id,
-            student: student._id,
-            studentName: `${student.firstName} ${student.lastName}`,
-            studentId: student.studentId,
+            institution: {
+              _id: institution._id,
+              name: institution.name,
+              contactEmail: institution.contactEmail,
+              verificationStatus: institution.verificationStatus
+            },
+            student: {
+              _id: request.student._id,
+              firstName: request.student.firstName,
+              lastName: request.student.lastName,
+              studentId: request.student.studentId,
+              program: request.student.program,
+              department: request.student.department
+            },
             requestDate: request.requestDate,
             purpose: request.purpose,
-            institution: request.institution,
-            status: request.status
+            justification: request.justification, // Add justification from model
+            consentForm: request.consentForm // Add consentForm from model
           });
         }
       });
     });
-    
-    // Get progress requests
-    const institutions = await Institution.find()
-      .populate({
-        path: 'requestedStudents',
-        match: { status: 'pending' },
-        populate: { 
-          path: 'student',
-          select: 'firstName lastName studentId program department' // Be explicit about fields
-        }
-      });
-    
+
+    // Get progress requests from Institutions
+    const institutionsWithPendingProgress = await Institution.find({
+      'requestedStudents.status': 'pending'
+    }).populate('requestedStudents.student', 'firstName lastName studentId program department');
+
     const progressRequests = [];
-    
-    institutions.forEach(institution => {
+    institutionsWithPendingProgress.forEach(institution => {
       institution.requestedStudents.forEach(request => {
         if (request.status === 'pending' && request.student) {
           progressRequests.push({
             _id: request._id,
-            institution: institution._id,
-            institutionName: institution.name,
-            contactEmail: institution.contactEmail,
-            verificationStatus: institution.verificationStatus,
-            student: request.student,
+            institution: {
+              _id: institution._id,
+              name: institution.name,
+              contactEmail: institution.contactEmail,
+              verificationStatus: institution.verificationStatus
+            },
+            student: {
+              _id: request.student._id,
+              firstName: request.student.firstName,
+              lastName: request.student.lastName,
+              studentId: request.student.studentId,
+              program: request.student.program,
+              department: request.student.department
+            },
             requestDate: request.requestDate,
             purpose: request.purpose,
             justification: request.justification,
@@ -218,7 +266,7 @@ exports.getPendingRequests = async (req, res, next) => {
         }
       });
     });
-    
+
     res.status(200).json({
       success: true,
       data: {
@@ -232,28 +280,34 @@ exports.getPendingRequests = async (req, res, next) => {
   }
 };
 
-// Get pending transcript requests
+// Get pending transcript requests (specific to transcripts, from Institutions)
 exports.getPendingTranscripts = async (req, res, next) => {
   try {
-    const students = await Student.find({ 'transcriptRequests.status': 'pending' })
-      .populate('transcriptRequests.institution');
-    
-    const requests = students.flatMap(student => 
-      student.transcriptRequests
+    const institutions = await Institution.find({ 'transcriptRequests.status': 'pending' })
+      .populate('transcriptRequests.student', 'firstName lastName studentId program department');
+
+    const requests = institutions.flatMap(institution =>
+      institution.transcriptRequests
         .filter(req => req.status === 'pending')
         .map(req => ({
           ...req.toObject(),
+          institution: {
+            _id: institution._id,
+            name: institution.name,
+            contactEmail: institution.contactEmail
+          },
           student: {
-            _id: student._id,
-            firstName: student.firstName,
-            lastName: student.lastName,
-            studentId: student.studentId
+            _id: req.student._id,
+            firstName: req.student.firstName,
+            lastName: req.student.lastName,
+            studentId: req.student.studentId
           }
         }))
     );
-    
+
     res.status(200).json({ success: true, data: requests });
   } catch (err) {
+    console.error('Error in getPendingTranscripts:', err);
     next(err);
   }
 };
@@ -277,9 +331,10 @@ exports.getInstitutionCount = async (req, res, next) => {
   }
 };
 
+// Count of pending transcript requests (from Institutions)
 exports.getPendingTranscriptsCount = async (req, res, next) => {
   try {
-    const count = await Student.countDocuments({ 'transcriptRequests.status': 'pending' });
+    const count = await Institution.countDocuments({ 'transcriptRequests.status': 'pending' });
     res.status(200).json({ success: true, count });
   } catch (err) {
     next(err);
@@ -295,16 +350,15 @@ exports.getPendingProgressCount = async (req, res, next) => {
   }
 };
 
-
 exports.getDashboardStats = async (req, res, next) => {
   try {
     const [studentsCount, institutionsCount, pendingTranscripts, pendingProgress] = await Promise.all([
       Student.countDocuments(),
       Institution.countDocuments(),
-      Student.countDocuments({ 'transcriptRequests.status': 'pending' }),
+      Institution.countDocuments({ 'transcriptRequests.status': 'pending' }), // Corrected
       Institution.countDocuments({ 'requestedStudents.status': 'pending' })
     ]);
-    
+
     res.status(200).json({
       success: true,
       data: {
@@ -318,19 +372,20 @@ exports.getDashboardStats = async (req, res, next) => {
     next(err);
   }
 };
+
 exports.getApprovedProgressRequests = async (req, res, next) => {
   try {
-    // Fetch institutions with approved requested students
+  
     const institutions = await Institution.find({
       'requestedStudents.status': 'approved'
     }).populate('requestedStudents.student', 'firstName lastName studentId program department');
 
-    // Map the results to the desired format
-    const approvedRequests = institutions.flatMap(institution => 
+
+    const approvedRequests = institutions.flatMap(institution =>
       institution.requestedStudents
         .filter(student => student.status === 'approved')
-        .map(student => ({
-          _id: student._id,
+        .map(request => ({ 
+          _id: request._id,
           institution: {
             _id: institution._id,
             name: institution.name,
@@ -338,20 +393,20 @@ exports.getApprovedProgressRequests = async (req, res, next) => {
             verificationStatus: institution.verificationStatus
           },
           student: {
-            _id: student.student._id,
-            firstName: student.student.firstName,
-            lastName: student.student.lastName,
-            studentId: student.student.studentId,
-            program: student.student.program,
-            department: student.student.department
+            _id: request.student._id,
+            firstName: request.student.firstName,
+            lastName: request.student.lastName,
+            studentId: request.student.studentId,
+            program: request.student.program,
+            department: request.student.department
           },
-          requestDate: student.requestDate,
-          processedAt: student.processedAt,
-          purpose: student.purpose,
-          justification: student.justification,
-          requestedData: student.requestedData,
-          consentForm: student.consentForm,
-          status: student.status
+          requestDate: request.requestDate,
+          processedAt: request.processedAt, 
+          purpose: request.purpose,
+          justification: request.justification,
+          requestedData: request.requestedData,
+          consentForm: request.consentForm,
+          status: request.status
         }))
     );
 
@@ -360,9 +415,11 @@ exports.getApprovedProgressRequests = async (req, res, next) => {
       data: approvedRequests
     });
   } catch (err) {
+    console.error('Error in getApprovedProgressRequests:', err);
     next(err);
   }
 };
+
 // Update student information
 exports.updateStudentCourse = async (req, res, next) => {
   try {
@@ -388,12 +445,13 @@ exports.updateStudentCourse = async (req, res, next) => {
     next(err);
   }
 };
-// Generate transcript PDF
+
+
 exports.generateTranscript = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const student = await Student.findById(id).populate('userId');
-    
+    const student = await Student.findById(id).populate('userId').populate('institution'); // Populate institution if it's a ref
+
     if (!student) {
       return res.status(404).json({ success: false, message: 'Student not found' });
     }
@@ -412,12 +470,12 @@ exports.generateTranscript = async (req, res, next) => {
     };
     let totalPoints = 0;
     let totalCredits = 0;
-    
+
     student.courses.forEach(course => {
       totalPoints += gradePoints[course.grade] * course.credits;
       totalCredits += course.credits;
     });
-    
+
     const gpa = totalCredits > 0 ? (totalPoints / totalCredits).toFixed(2) : 0;
 
     // HTML template for transcript
@@ -443,7 +501,7 @@ exports.generateTranscript = async (req, res, next) => {
       <body>
         <div class="header">
           <h1>OFFICIAL TRANSCRIPT</h1>
-          <h2>${student.institution || 'University Name'}</h2>
+          <h2>${student.institution ? student.institution.name : 'University Name'}</h2>
         </div>
         
         <div class="student-info">
@@ -520,63 +578,136 @@ exports.generateTranscript = async (req, res, next) => {
     // Generate PDF
     pdf.create(html, options).toBuffer((err, buffer) => {
       if (err) {
+        console.error('PDF generation error:', err);
         return next(err);
       }
-      
+
       // Set response headers
       res.set({
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename=transcript_${student.studentId}.pdf`,
         'Content-Length': buffer.length
       });
-      
+
       // Send the PDF
       res.send(buffer);
     });
   } catch (err) {
+    console.error('Error generating transcript:', err);
     next(err);
   }
 };
 
-// Request transcript (for students)
 exports.requestTranscript = async (req, res, next) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params; 
     const { purpose, institutionId } = req.body;
-    
+
     const student = await Student.findById(id);
     if (!student) {
       return res.status(404).json({ success: false, message: 'Student not found' });
     }
-    
+
+    const institution = await Institution.findById(institutionId);
+    if (!institution) {
+        return res.status(404).json({ success: false, message: 'Target institution not found for request.' });
+    }
+
+    // Check if a similar request already exists
+    const existingRequest = institution.transcriptRequests.find(
+        req => req.student.toString() === student._id.toString() && req.status === 'pending'
+    );
+
+    if (existingRequest) {
+        return res.status(400).json({ success: false, message: 'A pending transcript request to this institution already exists for this student.' });
+    }
+
     const newRequest = {
       requestDate: new Date(),
       purpose,
-      institution: institutionId,
+      student: student._id, // Add student ID to the request on Institution model
       status: 'pending'
     };
-    
-    student.transcriptRequests.push(newRequest);
-    await student.save();
-    
-    res.status(201).json({ success: true, data: newRequest });
+
+    institution.transcriptRequests.push(newRequest);
+    await institution.save();
+
+    res.status(201).json({ success: true, message: 'Transcript request sent to institution.', data: newRequest });
   } catch (err) {
+    console.error('Error in requestTranscript (admin acting):', err);
     next(err);
   }
 };
 
-// Get student transcript requests
+// This function seems out of place here. Students should get their own requests via studentController.
 exports.getStudentTranscriptRequests = async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const student = await Student.findById(id).populate('transcriptRequests.institution');
-    
+    const { id } = req.params; // This `id` would be the student's ID
+    const student = await Student.findById(id); // Only find the student, not requests from institution.
+
     if (!student) {
       return res.status(404).json({ success: false, message: 'Student not found' });
     }
-    
-    res.status(200).json({ success: true, data: student.transcriptRequests });
+
+    // To get all transcript requests related to a student, you'd query Institution model
+    const institutionsWithStudentRequests = await Institution.find({
+        'transcriptRequests.student': id
+    }).populate('transcriptRequests.student', 'firstName lastName studentId'); // Populate student for context
+
+    const studentRelatedRequests = [];
+    institutionsWithStudentRequests.forEach(inst => {
+        inst.transcriptRequests.forEach(req => {
+            if (req.student.toString() === id) {
+                studentRelatedRequests.push({
+                    _id: req._id,
+                    institution: {
+                        _id: inst._id,
+                        name: inst.name
+                    },
+                    requestDate: req.requestDate,
+                    purpose: req.purpose,
+                    status: req.status
+                });
+            }
+        });
+    });
+
+    res.status(200).json({ success: true, data: studentRelatedRequests });
   } catch (err) {
+    console.error('Error in getStudentTranscriptRequests (admin looking up student requests):', err);
+    next(err);
+  }
+};
+exports.getApprovedTranscripts = async (req, res, next) => {
+  try {
+    const institutions = await Institution.find({ 'transcriptRequests.status': 'approved' })
+      .populate('transcriptRequests.student', 'firstName lastName studentId program department');
+
+    const requests = institutions.flatMap(institution =>
+      institution.transcriptRequests
+        .filter(req => req.status === 'approved')
+        .map(req => ({
+          ...req.toObject(),
+          institution: {
+            _id: institution._id,
+            name: institution.name,
+            contactEmail: institution.contactEmail,
+            verificationStatus: institution.verificationStatus // Include verification status
+          },
+          student: {
+            _id: req.student._id,
+            firstName: req.student.firstName,
+            lastName: req.student.lastName,
+            studentId: req.student.studentId,
+            program: req.student.program,
+            department: req.student.department
+          }
+        }))
+    );
+
+    res.status(200).json({ success: true, data: requests });
+  } catch (err) {
+    console.error('Error in getApprovedTranscripts:', err);
     next(err);
   }
 };

@@ -16,6 +16,14 @@ router.post('/request-progress/:studentId',
 router.get('/student-progress/:studentId', institutionController.getStudentProgress);
 router.get('/students', institutionController.getAllStudents);
 router.get('/requests', institutionController.getRequests);
+router.post('/request-transcript/:studentId',
+  upload.single('consentForm'), // Optional: if consent form is needed for transcript requests
+  institutionController.requestStudentTranscript
+);
+router.get('/transcript-requests', institutionController.getInstitutionTranscriptRequests);
+router.get('/students/:studentId/transcript/download',
+  institutionController.downloadApprovedStudentTranscript
+);
 router.get('/students/:studentId/transcript', 
   protect, 
   authorize('institution'), 
