@@ -4,11 +4,15 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import AuthContext from '../../context/AuthContext';
+import Modal from '../../components/ui/Modal';
 
 const InstitutionRequests = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState(null);
   const { authTokens } = useContext(AuthContext);
+
 
   useEffect(() => {
     const fetchRequests = async () => {
@@ -40,8 +44,17 @@ const InstitutionRequests = () => {
     }
   };
 
+  const handleViewSupportingDocuments = (request) => {
+    setSelectedRequest(request);
+    setIsModalOpen(true);
+  };
+
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div>Loading...</div>
+      </div>
+    );
   }
 
   return (
@@ -119,12 +132,22 @@ const InstitutionRequests = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           {request.status === 'approved' ? (
-                            <Link
-                              to={`/institution/student-progress/${request.student?._id}`}
-                              className="text-blue-600 hover:text-blue-900"
-                            >
-                              View Progress
-                            </Link>
+                            <div className="flex items-center space-x-3">
+                              <Link
+                                to={`/institution/student-progress/${request.student?._id}`}
+                                className="text-blue-600 hover:text-blue-900"
+                              >
+                                View Progress
+                              </Link>
+                              {request.supportingDocuments && request.supportingDocuments.length > 0 && (
+                                <button
+                                  onClick={() => handleViewSupportingDocuments(request)}
+                                  className="text-indigo-600 hover:text-indigo-900"
+                                >
+                                  View Supporting Documents
+                                </button>
+                              )}
+                            </div>
                           ) : (
                             <span className="text-gray-400">Pending approval</span>
                           )}
@@ -138,6 +161,44 @@ const InstitutionRequests = () => {
           </div>
         </div>
       </div>
+
+      {/* Supporting Documents Modal */}
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+        {selectedRequest && (
+          <div className="p-6">
+            <h2 className="text-xl font-bold mb-4">Supporting Documents (Admin Uploaded)</h2>
+            {selectedRequest.supportingDocuments && selectedRequest.supportingDocuments.length > 0 ? (
+              <ul className="list-disc pl-5 space-y-2">
+                {selectedRequest.supportingDocuments.map((docPath, index) => (
+                  <li key={index}>
+                    <a
+                      href={`http://localhost:5000${docPath}`} // This URL must match your static file serving setup
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline inline-flex items-center"
+                    >
+                      <svg className="w-4 h-4 mr-1 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                      </svg>
+                      {`Document ${index + 1} (${docPath.split('/').pop()})`}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-gray-600">No supporting documents provided by admin for this request.</p>
+            )}
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

@@ -7,7 +7,7 @@ import Modal from '../../components/ui/Modal';
 // Date formatting function
 const formatDate = (dateString) => {
   if (!dateString) return 'N/A';
-  
+
   const date = new Date(dateString);
   return date.toLocaleString('en-US', {
     month: 'short',
@@ -187,7 +187,7 @@ const ApprovedProgressTable = () => {
         {selectedRequest && (
           <div className="p-6 max-h-[600px] overflow-y-auto">
             <h2 className="text-xl font-bold mb-4">Approved Progress Request Details</h2>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               <div className="bg-gray-50 p-4 rounded-lg">
                 <h3 className="font-medium text-gray-700 mb-2">Request Information</h3>
@@ -197,7 +197,11 @@ const ApprovedProgressTable = () => {
                   <p><span className="font-medium">Approved On:</span> {formatDate(selectedRequest.processedAt)}</p>
                   <p>
                     <span className="font-medium">Status:</span>{' '}
-                    <span className="capitalize text-green-600 font-medium">
+                    <span className={`ml-1 px-2 py-1 text-xs rounded-full ${
+                      selectedRequest.status === 'approved' ?
+                        'bg-green-100 text-green-800' :
+                        'bg-yellow-100 text-yellow-800' // Fallback, though it should always be 'approved' here
+                    }`}>
                       {selectedRequest.status}
                     </span>
                   </p>
@@ -210,7 +214,7 @@ const ApprovedProgressTable = () => {
                   <p><span className="font-medium">Purpose:</span> {selectedRequest.purpose}</p>
                   <p><span className="font-medium">Justification:</span> {selectedRequest.justification}</p>
                   <div>
-                    <span className="font-medium">Requested Data:</span> 
+                    <span className="font-medium">Requested Data:</span>
                     <ul className="list-disc list-inside mt-1">
                       {selectedRequest.requestedData?.map((data, index) => (
                         <li key={index}>{data}</li>
@@ -230,8 +234,8 @@ const ApprovedProgressTable = () => {
                   <p>
                     <span className="font-medium">Verification Status:</span>{' '}
                     <span className={`ml-1 px-2 py-1 text-xs rounded-full ${
-                      selectedRequest.institution.verificationStatus === 'verified' ? 
-                        'bg-green-100 text-green-800' : 
+                      selectedRequest.institution.verificationStatus === 'verified' ?
+                        'bg-green-100 text-green-800' :
                         'bg-yellow-100 text-yellow-800'
                     }`}>
                       {selectedRequest.institution.verificationStatus}
@@ -251,12 +255,36 @@ const ApprovedProgressTable = () => {
               </div>
             </div>
 
+            {/* Display existing Supporting Documents */}
+            {selectedRequest.supportingDocuments && selectedRequest.supportingDocuments.length > 0 && (
+              <div className="bg-gray-50 p-4 rounded-lg mb-6">
+                <h3 className="font-medium text-gray-700 mb-2">Supporting Document(s)</h3>
+                <ul className="list-disc pl-5 space-y-1">
+                  {selectedRequest.supportingDocuments.map((docPath, index) => (
+                    <li key={index}>
+                      <a
+                        href={`http://localhost:5000${docPath}`} // Assuming your backend serves static files from /uploads
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline inline-flex items-center"
+                      >
+                        <svg className="w-4 h-4 mr-1 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                        </svg>
+                        {`Document ${index + 1} (${docPath.split('/').pop()})`}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {selectedRequest.consentForm && (
               <div className="bg-gray-50 p-4 rounded-lg mb-6">
                 <h3 className="font-medium text-gray-700 mb-2">Consent Form</h3>
-                <a 
-                  href={selectedRequest.consentForm} 
-                  target="_blank" 
+                <a
+                  href={selectedRequest.consentForm}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-600 hover:underline inline-flex items-center"
                 >
@@ -284,4 +312,3 @@ const ApprovedProgressTable = () => {
 };
 
 export default ApprovedProgressTable;
-

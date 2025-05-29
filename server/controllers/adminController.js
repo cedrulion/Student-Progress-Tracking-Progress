@@ -1,9 +1,25 @@
 const Student = require('../models/Student');
 const Institution = require('../models/Institution');
 const User = require('../models/User');
-const pdf = require('html-pdf'); 
+const pdf = require('html-pdf');
 const fs = require('fs');
 const path = require('path');
+const multer = require('multer'); // Import multer
+
+// Configure Multer storage
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    // Ensure the uploads directory exists
+    const uploadPath = path.join(__dirname, '../uploads');
+    fs.mkdirSync(uploadPath, { recursive: true });
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`);
+  }
+});
+
+const upload = multer({ storage: storage }); // Create the upload middleware
 
 const getUserId = (user) => {
   return user._id || user.id;
@@ -39,6 +55,8 @@ exports.respondToTranscriptRequest = async (req, res, next) => {
   try {
     const { institutionId, requestId } = req.params;
     const { status } = req.body; // 'approved' or 'rejected'
+    // Access uploaded files if any
+    const files = req.files; // req.files will be an array of file objects if using upload.array()
 
     if (!['approved', 'rejected'].includes(status)) {
       return res.status(400).json({ success: false, message: 'Invalid status provided. Must be "approved" or "rejected".' });
@@ -60,8 +78,14 @@ exports.respondToTranscriptRequest = async (req, res, next) => {
     }
 
     transcriptRequest.status = status;
-    // Optional: Add a processedAt timestamp
     transcriptRequest.processedAt = new Date();
+
+    // Add supporting documents if provided (optional)
+    if (files && files.length > 0) {
+      // Map file paths from multer's file objects
+      transcriptRequest.supportingDocuments = files.map(file => `/uploads/${file.filename}`);
+    }
+
     await institution.save();
 
     res.status(200).json({
@@ -82,6 +106,8 @@ exports.approveProgressRequest = async (req, res, next) => {
   try {
     const { institutionId, requestId } = req.params;
     const { status } = req.body; // 'approved' or 'rejected'
+    // Access uploaded files if any
+    const files = req.files; // req.files will be an array of file objects if using upload.array()
 
     if (!['approved', 'rejected'].includes(status)) {
       return res.status(400).json({ success: false, message: 'Invalid status provided. Must be "approved" or "rejected".' });
@@ -104,6 +130,13 @@ exports.approveProgressRequest = async (req, res, next) => {
 
     request.status = status;
     request.processedAt = new Date(); // Add processedAt timestamp
+
+    // Add supporting documents if provided (optional)
+    if (files && files.length > 0) {
+      // Map file paths from multer's file objects
+      request.supportingDocuments = files.map(file => `/uploads/${file.filename}`);
+    }
+
     await institution.save();
 
     res.status(200).json({ success: true, data: institution });
@@ -226,7 +259,8 @@ exports.getPendingRequests = async (req, res, next) => {
             requestDate: request.requestDate,
             purpose: request.purpose,
             justification: request.justification, // Add justification from model
-            consentForm: request.consentForm // Add consentForm from model
+            consentForm: request.consentForm, // Add consentForm from model
+            supportingDocuments: request.supportingDocuments // Include supporting documents
           });
         }
       });
@@ -261,7 +295,8 @@ exports.getPendingRequests = async (req, res, next) => {
             purpose: request.purpose,
             justification: request.justification,
             requestedData: request.requestedData,
-            consentForm: request.consentForm
+            consentForm: request.consentForm,
+            supportingDocuments: request.supportingDocuments // Include supporting documents
           });
         }
       });
@@ -301,7 +336,8 @@ exports.getPendingTranscripts = async (req, res, next) => {
             firstName: req.student.firstName,
             lastName: req.student.lastName,
             studentId: req.student.studentId
-          }
+          },
+          supportingDocuments: req.supportingDocuments // Include supporting documents
         }))
     );
 
@@ -375,7 +411,7 @@ exports.getDashboardStats = async (req, res, next) => {
 
 exports.getApprovedProgressRequests = async (req, res, next) => {
   try {
-  
+
     const institutions = await Institution.find({
       'requestedStudents.status': 'approved'
     }).populate('requestedStudents.student', 'firstName lastName studentId program department');
@@ -384,7 +420,7 @@ exports.getApprovedProgressRequests = async (req, res, next) => {
     const approvedRequests = institutions.flatMap(institution =>
       institution.requestedStudents
         .filter(student => student.status === 'approved')
-        .map(request => ({ 
+        .map(request => ({
           _id: request._id,
           institution: {
             _id: institution._id,
@@ -401,12 +437,13 @@ exports.getApprovedProgressRequests = async (req, res, next) => {
             department: request.student.department
           },
           requestDate: request.requestDate,
-          processedAt: request.processedAt, 
+          processedAt: request.processedAt,
           purpose: request.purpose,
           justification: request.justification,
           requestedData: request.requestedData,
           consentForm: request.consentForm,
-          status: request.status
+          status: request.status,
+          supportingDocuments: request.supportingDocuments // Include supporting documents
         }))
     );
 
@@ -503,7 +540,7 @@ exports.generateTranscript = async (req, res, next) => {
           <h1>OFFICIAL TRANSCRIPT</h1>
           <h2>${student.institution ? student.institution.name : 'University Name'}</h2>
         </div>
-        
+
         <div class="student-info">
           <table>
             <tr>
@@ -526,7 +563,7 @@ exports.generateTranscript = async (req, res, next) => {
             </tr>
           </table>
         </div>
-        
+
         <table class="course-table">
           <thead>
             <tr>
@@ -551,11 +588,11 @@ exports.generateTranscript = async (req, res, next) => {
             `).join('')}
           </tbody>
         </table>
-        
+
         <div class="gpa">
           Cumulative GPA: ${gpa}
         </div>
-        
+
         <div class="footer">
           <p>This is an official document. Any alteration makes it invalid.</p>
           <p>Registrar's Signature: _________________________</p>
@@ -600,7 +637,7 @@ exports.generateTranscript = async (req, res, next) => {
 
 exports.requestTranscript = async (req, res, next) => {
   try {
-    const { id } = req.params; 
+    const { id } = req.params;
     const { purpose, institutionId } = req.body;
 
     const student = await Student.findById(id);
@@ -610,22 +647,21 @@ exports.requestTranscript = async (req, res, next) => {
 
     const institution = await Institution.findById(institutionId);
     if (!institution) {
-        return res.status(404).json({ success: false, message: 'Target institution not found for request.' });
+      return res.status(404).json({ success: false, message: 'Target institution not found for request.' });
     }
 
-    // Check if a similar request already exists
     const existingRequest = institution.transcriptRequests.find(
-        req => req.student.toString() === student._id.toString() && req.status === 'pending'
+      req => req.student.toString() === student._id.toString() && req.status === 'pending'
     );
 
     if (existingRequest) {
-        return res.status(400).json({ success: false, message: 'A pending transcript request to this institution already exists for this student.' });
+      return res.status(400).json({ success: false, message: 'A pending transcript request to this institution already exists for this student.' });
     }
 
     const newRequest = {
       requestDate: new Date(),
       purpose,
-      student: student._id, // Add student ID to the request on Institution model
+      student: student._id,
       status: 'pending'
     };
 
@@ -639,37 +675,37 @@ exports.requestTranscript = async (req, res, next) => {
   }
 };
 
-// This function seems out of place here. Students should get their own requests via studentController.
 exports.getStudentTranscriptRequests = async (req, res, next) => {
   try {
-    const { id } = req.params; // This `id` would be the student's ID
-    const student = await Student.findById(id); // Only find the student, not requests from institution.
+    const { id } = req.params;
+    const student = await Student.findById(id); 
 
     if (!student) {
       return res.status(404).json({ success: false, message: 'Student not found' });
     }
 
-    // To get all transcript requests related to a student, you'd query Institution model
+ 
     const institutionsWithStudentRequests = await Institution.find({
-        'transcriptRequests.student': id
-    }).populate('transcriptRequests.student', 'firstName lastName studentId'); // Populate student for context
+      'transcriptRequests.student': id
+    }).populate('transcriptRequests.student', 'firstName lastName studentId'); t
 
     const studentRelatedRequests = [];
     institutionsWithStudentRequests.forEach(inst => {
-        inst.transcriptRequests.forEach(req => {
-            if (req.student.toString() === id) {
-                studentRelatedRequests.push({
-                    _id: req._id,
-                    institution: {
-                        _id: inst._id,
-                        name: inst.name
-                    },
-                    requestDate: req.requestDate,
-                    purpose: req.purpose,
-                    status: req.status
-                });
-            }
-        });
+      inst.transcriptRequests.forEach(req => {
+        if (req.student.toString() === id) {
+          studentRelatedRequests.push({
+            _id: req._id,
+            institution: {
+              _id: inst._id,
+              name: inst.name
+            },
+            requestDate: req.requestDate,
+            purpose: req.purpose,
+            status: req.status,
+            supportingDocuments: req.supportingDocuments // Include supporting documents
+          });
+        }
+      });
     });
 
     res.status(200).json({ success: true, data: studentRelatedRequests });
@@ -701,7 +737,8 @@ exports.getApprovedTranscripts = async (req, res, next) => {
             studentId: req.student.studentId,
             program: req.student.program,
             department: req.student.department
-          }
+          },
+          supportingDocuments: req.supportingDocuments // Include supporting documents
         }))
     );
 
@@ -711,3 +748,6 @@ exports.getApprovedTranscripts = async (req, res, next) => {
     next(err);
   }
 };
+
+// Export the upload middleware
+exports.upload = upload;

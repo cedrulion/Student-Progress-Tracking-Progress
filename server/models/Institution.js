@@ -39,7 +39,7 @@ const institutionSchema = new mongoose.Schema({
     default: 'pending'
   },
   verificationDocuments: [String],
-  requestedStudents: [{ 
+  requestedStudents: [{
     student: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Student'
@@ -61,13 +61,15 @@ const institutionSchema = new mongoose.Schema({
     },
     requestedData: [{
       type: String,
-      enum: ['academic_records'], 
+      enum: ['academic_records'],
     }],
     consentForm: {
-      type: String 
-    }
+      type: String
+    },
+
+    supportingDocuments: [String]
   }],
-  
+
   transcriptRequests: [{
     student: {
       type: mongoose.Schema.Types.ObjectId,
@@ -91,10 +93,11 @@ const institutionSchema = new mongoose.Schema({
       type: String,
       required: true
     },
-
     consentForm: {
-      type: String 
-    }
+      type: String
+    },
+
+    supportingDocuments: [String] 
   }]
 }, {
   timestamps: true

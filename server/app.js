@@ -6,6 +6,7 @@ const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 const errorHandler = require('./middleware/errorHandler');
 const config = require('./config/config');
+const path = require('path');
 
 const app = express();
 
@@ -34,6 +35,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/students', require('./routes/students'));
 app.use('/api/institutions', require('./routes/institutions'));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Error handling middleware
 app.use(errorHandler);

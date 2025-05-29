@@ -210,15 +210,14 @@ exports.downloadTranscript = async (req, res, next) => {
       if (err) {
         return next(err);
       }
-      
-      // Set response headers
+
       res.set({
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename=transcript_${student.studentId}.pdf`,
         'Content-Length': buffer.length
       });
       
-      // Send the PDF
+     
       res.send(buffer);
     });
   } catch (err) {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react'; // Import useRef
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import Modal from '../../components/ui/Modal';
@@ -10,10 +10,13 @@ const AdminRequests = () => {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [requestType, setRequestType] = useState('');
+  const fileInputRef = useRef(null); // Ref for the file input
 
+  // Fetches pending requests from the API on component mount
   useEffect(() => {
     const fetchRequests = async () => {
       try {
+        setLoading(true); // Set loading true before fetching
         const res = await axios.get('http://localhost:5000/api/admin/pending-requests');
         setRequests(res.data.data);
         setLoading(false);
@@ -26,34 +29,74 @@ const AdminRequests = () => {
     fetchRequests();
   }, []);
 
+  // Sets the selected request and its type, then opens the modal
   const viewRequestDetails = (request, type) => {
     setSelectedRequest(request);
     setRequestType(type);
     setIsModalOpen(true);
   };
 
+  // Handles the approval or rejection of a request, including file uploads
   const approveRequest = async (type, institutionId, requestId, status) => {
     try {
+      const formData = new FormData();
+      formData.append('status', status);
+
+      // Append selected files if any
+      if (fileInputRef.current && fileInputRef.current.files.length > 0) {
+        for (let i = 0; i < fileInputRef.current.files.length; i++) {
+          formData.append('supportingDocuments', fileInputRef.current.files[i]);
+        }
+      }
+
+      let res;
       if (type === 'transcript') {
-        await axios.put(`http://localhost:5000/api/admin/transcript-requests/${institutionId}/${requestId}`, { status });
+        // THIS IS THE CRITICAL LINE FOR THE URL
+        res = await axios.put(
+          `http://localhost:5000/api/admin/transcript-requests/${institutionId}/${requestId}`,
+          formData,
+          {
+            headers: {
+              'Content-Type': 'multipart/form-data', // Important for file uploads
+            },
+          }
+        );
+        // Update the state to remove the approved/rejected transcript request
         setRequests(prevRequests => ({
           ...prevRequests,
           transcriptRequests: prevRequests.transcriptRequests.filter(req => req._id !== requestId)
         }));
-      } else {
-        await axios.put(`http://localhost:5000/api/admin/progress-requests/${institutionId}/${requestId}`, { status });
+      } else { // type === 'progress'
+        // THIS IS THE CRITICAL LINE FOR THE URL
+        res = await axios.put(
+          `http://localhost:5000/api/admin/progress-requests/${institutionId}/${requestId}`,
+          formData,
+          {
+            headers: {
+              'Content-Type': 'multipart/form-data', // Important for file uploads
+            },
+          }
+        );
+        // Update the state to remove the approved/rejected progress request
         setRequests(prevRequests => ({
           ...prevRequests,
           progressRequests: prevRequests.progressRequests.filter(req => req._id !== requestId)
         }));
       }
+
       toast.success(`Request ${status} successfully`);
       setIsModalOpen(false);
+      // Clear the file input after successful submission
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     } catch (err) {
+      console.error('Error updating request:', err); // Log the error for debugging
       toast.error(err.response?.data?.message || 'Failed to update request');
     }
   };
 
+  // Displays a spinner while loading
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -61,6 +104,16 @@ const AdminRequests = () => {
       </div>
     );
   }
+
+  // Ensure requests is not null before trying to access its properties
+  if (!requests) {
+      return (
+          <div className="text-center py-10 text-gray-500">
+              No requests data available.
+          </div>
+      );
+  }
+
 
   return (
     <div className="py-6">
@@ -74,6 +127,7 @@ const AdminRequests = () => {
         </div>
 
         <div className="mt-8">
+          {/* Transcript Requests Section */}
           <div className="mb-8 bg-white shadow overflow-hidden rounded-lg">
             <div className="px-4 py-5 sm:px-6">
               <h3 className="text-lg leading-6 font-medium text-gray-900">
@@ -148,6 +202,7 @@ const AdminRequests = () => {
             </div>
           </div>
 
+          {/* Student Progress Requests Section */}
           <div className="bg-white shadow overflow-hidden rounded-lg">
             <div className="px-4 py-5 sm:px-6">
               <h3 className="text-lg leading-6 font-medium text-gray-900">
@@ -183,7 +238,7 @@ const AdminRequests = () => {
                         <tr key={request._id}>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm font-medium text-gray-900">
-                              {request.institutionName}
+                              {request.institution?.name || 'N/A'} {/* Access name from nested institution */}
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -219,6 +274,7 @@ const AdminRequests = () => {
         </div>
       </div>
 
+      {/* Request Details Modal */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
         {selectedRequest && (
           <div className="p-6">
@@ -263,18 +319,19 @@ const AdminRequests = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               <div className="bg-gray-50 p-4 rounded-lg">
                 <h3 className="font-medium text-gray-700 mb-2">
-                  {requestType === 'transcript' ? 'Requesting Institution' : 'Requesting Institution'} Information
+                  Requesting Institution Information
                 </h3>
                 <div className="space-y-2">
-                  <p><span className="font-medium">Name:</span> {selectedRequest.institution?.name || selectedRequest.institutionName || 'N/A'}</p>
-                  <p><span className="font-medium">Contact Email:</span> {selectedRequest.institution?.contactEmail || selectedRequest.contactEmail || 'N/A'}</p>
-                  <p><span className="font-medium">Verification Status:</span> {selectedRequest.institution?.verificationStatus || selectedRequest.verificationStatus || 'N/A'}</p>
+                  {/* Access institution details from the nested 'institution' object */}
+                  <p><span className="font-medium">Name:</span> {selectedRequest.institution?.name || 'N/A'}</p>
+                  <p><span className="font-medium">Contact Email:</span> {selectedRequest.institution?.contactEmail || 'N/A'}</p>
+                  <p><span className="font-medium">Verification Status:</span> {selectedRequest.institution?.verificationStatus || 'N/A'}</p>
                 </div>
               </div>
 
               <div className="bg-gray-50 p-4 rounded-lg">
                 <h3 className="font-medium text-gray-700 mb-2">
-                  {requestType === 'transcript' ? 'Student' : 'Student'} Information
+                  Student Information
                 </h3>
                 <div className="space-y-2">
                   <p><span className="font-medium">Student Name:</span> {selectedRequest.student?.firstName} {selectedRequest.student?.lastName}</p>
@@ -284,6 +341,27 @@ const AdminRequests = () => {
                 </div>
               </div>
             </div>
+
+            {/* Display existing Supporting Documents */}
+            {selectedRequest.supportingDocuments && selectedRequest.supportingDocuments.length > 0 && (
+              <div className="bg-gray-50 p-4 rounded-lg mb-6">
+                <h3 className="font-medium text-gray-700 mb-2">Existing Supporting Document(s)</h3>
+                <ul className="list-disc pl-5 space-y-1">
+                  {selectedRequest.supportingDocuments.map((docPath, index) => (
+                    <li key={index}>
+                      <a
+                        href={`http://localhost:5000${docPath}`} // Assuming your backend serves static files from /uploads
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        {`Document ${index + 1} (${docPath.split('/').pop()})`}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {selectedRequest.consentForm && (
               <div className="bg-gray-50 p-4 rounded-lg mb-6">
@@ -299,6 +377,25 @@ const AdminRequests = () => {
               </div>
             )}
 
+            {/* File input for new supporting documents */}
+            <div className="mt-4 mb-6">
+              <label htmlFor="supportingDocuments" className="block text-sm font-medium text-gray-700 mb-2">
+                Upload Supporting Document(s) (Optional)
+              </label>
+              <input
+                type="file"
+                id="supportingDocuments"
+                name="supportingDocuments"
+                multiple // Allow multiple file selection
+                ref={fileInputRef} // Attach the ref here
+                className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              />
+              <p className="mt-1 text-sm text-gray-500">
+                You can upload one or more files to support your decision.
+              </p>
+            </div>
+
+
             <div className="flex justify-end space-x-3 mt-6">
               <button
                 onClick={() => setIsModalOpen(false)}
@@ -309,7 +406,7 @@ const AdminRequests = () => {
               <button
                 onClick={() => approveRequest(
                   requestType,
-                  selectedRequest.institution._id,
+                  selectedRequest.institution._id, // This remains correct
                   selectedRequest._id,
                   'rejected'
                 )}
@@ -320,7 +417,7 @@ const AdminRequests = () => {
               <button
                 onClick={() => approveRequest(
                   requestType,
-                  selectedRequest.institution._id,
+                  selectedRequest.institution._id, // This remains correct
                   selectedRequest._id,
                   'approved'
                 )}

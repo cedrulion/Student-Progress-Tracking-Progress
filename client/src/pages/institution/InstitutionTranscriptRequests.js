@@ -13,7 +13,14 @@ const InstitutionTranscriptRequests = () => {
     const fetchTranscriptRequests = async () => {
       try {
         setLoading(true);
-        const res = await axios.get('http://localhost:5000/api/institutions/transcript-requests');
+        // Ensure Axios is configured to send tokens for all requests, or pass it here
+        const token = localStorage.getItem('token'); // Get your token from storage
+        const config = {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        };
+        const res = await axios.get('http://localhost:5000/api/institutions/transcript-requests', config);
         setTranscriptRequests(res.data.data);
       } catch (err) {
         setError(err.response?.data?.message || 'Failed to fetch transcript requests.');
@@ -25,6 +32,61 @@ const InstitutionTranscriptRequests = () => {
 
     fetchTranscriptRequests();
   }, []);
+
+  // --- New handleDownload function ---
+  const handleDownload = async (studentId, studentName) => {
+    try {
+      const token = localStorage.getItem('token'); // Get your authentication token
+      if (!token) {
+        toast.error('Authentication token not found. Please log in again.');
+        return;
+      }
+
+      // Make an Axios GET request to the download endpoint
+      const response = await axios.get(
+        `http://localhost:5000/api/institutions/students/${studentId}/transcript/download`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`, // Include the authentication token
+          },
+          responseType: 'blob', // Important: tells Axios to expect a binary response (like a PDF)
+        }
+      );
+
+      // Create a Blob from the response data
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+
+      // Create a URL for the Blob
+      const url = window.URL.createObjectURL(blob);
+
+      // Create a temporary link element
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${studentName}_transcript.pdf`); // Suggest a filename
+      document.body.appendChild(link);
+
+      // Programmatically click the link to trigger the download
+      link.click();
+
+      // Clean up by revoking the object URL and removing the link
+      window.URL.revokeObjectURL(url);
+      link.remove();
+      toast.success('Transcript downloaded successfully!');
+    } catch (err) {
+      console.error('Error downloading transcript:', err);
+      // More specific error handling based on backend response
+      if (err.response && err.response.status === 403) {
+        toast.error('You do not have an approved request to download this transcript or your institution is not verified.');
+      } else if (err.response && err.response.status === 404) {
+        toast.error('Student or transcript not found.');
+      } else if (err.response && err.response.data && err.response.data.message) {
+        toast.error(`Download failed: ${err.response.data.message}`);
+      } else {
+        toast.error('Failed to download transcript. Please try again.');
+      }
+    }
+  };
+  // --- End new handleDownload function ---
 
   if (loading) {
     return (
@@ -99,9 +161,8 @@ const InstitutionTranscriptRequests = () => {
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Request Date
-                      </th> 
+                      </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      
                         Status
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -148,14 +209,17 @@ const InstitutionTranscriptRequests = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           {request.status === 'approved' && request.student && (
-                            <a
-                              href={`http://localhost:5000/api/institutions/students/${request.student._id}/transcript/download`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-indigo-600 hover:text-indigo-900 mr-4"
+                            <button
+                              onClick={() =>
+                                handleDownload(
+                                  request.student._id,
+                                  `${request.student.firstName}_${request.student.lastName}`
+                                )
+                              }
+                              className="text-indigo-600 hover:text-indigo-900 mr-4 focus:outline-none"
                             >
                               Download Transcript
-                            </a>
+                            </button>
                           )}
                           {/* Add other actions like 'View Details' if needed */}
                         </td>

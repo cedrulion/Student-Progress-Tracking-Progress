@@ -1,5 +1,10 @@
+// institutionController.js
+
 const Institution = require('../models/Institution');
 const Student = require('../models/Student');
+const pdf = require('html-pdf');
+const path = require('path');
+const fs = require('fs');
 
 // Helper function to get user ID consistently
 const getUserId = (user) => {
@@ -15,7 +20,7 @@ exports.getProfile = async (req, res, next) => {
     if (!institution) {
       return res.status(404).json({ success: false, message: 'Institution not found' });
     }
-    
+
     res.status(200).json({ success: true, data: institution });
   } catch (err) {
     next(err);
@@ -31,11 +36,11 @@ exports.updateProfile = async (req, res, next) => {
       req.body,
       { new: true, runValidators: true }
     ).populate('userId');
-    
+
     if (!institution) {
       return res.status(404).json({ success: false, message: 'Institution not found' });
     }
-    
+
     res.status(200).json({ success: true, data: institution });
   } catch (err) {
     next(err);
@@ -46,59 +51,59 @@ exports.updateProfile = async (req, res, next) => {
 exports.requestStudentProgress = async (req, res, next) => {
   try {
     const { studentId } = req.params;
-    
+
     // Get user ID consistently
     const userId = getUserId(req.user);
-    
+
     const institution = await Institution.findOne({ userId: userId });
     if (!institution) {
       return res.status(404).json({ success: false, message: 'Institution not found' });
     }
-    
+
     // Check if institution is verified
     if (institution.verificationStatus !== 'verified') {
-      return res.status(403).json({ 
-        success: false, 
-        message: 'Your institution needs to be verified first' 
+      return res.status(403).json({
+        success: false,
+        message: 'Your institution needs to be verified first'
       });
     }
-    
+
     // Check if student exists
     const student = await Student.findById(studentId);
     if (!student) {
       return res.status(404).json({ success: false, message: 'Student not found' });
     }
-    
+
     // Check if request already exists
     const existingRequest = institution.requestedStudents.find(
       req => req.student.toString() === studentId
     );
-    
+
     if (existingRequest) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'You have already requested this student\'s progress' 
+      return res.status(400).json({
+        success: false,
+        message: 'You have already requested this student\'s progress'
       });
     }
-    
+
     // Create new request with data from FormData
     const newRequest = {
       student: studentId,
       purpose: req.body.purpose,
       justification: req.body.justification,
-      requestedData: Array.isArray(req.body.requestedData) 
-        ? req.body.requestedData 
+      requestedData: Array.isArray(req.body.requestedData)
+        ? req.body.requestedData
         : [req.body.requestedData].filter(Boolean)
     };
-    
+
     // Handle file upload if exists
     if (req.file) {
       newRequest.consentForm = req.file.path;
     }
-    
+
     institution.requestedStudents.push(newRequest);
     await institution.save();
-    
+
     res.status(201).json({ success: true, data: institution });
   } catch (err) {
     next(err);
@@ -109,30 +114,30 @@ exports.requestStudentProgress = async (req, res, next) => {
 exports.getStudentProgress = async (req, res, next) => {
   try {
     const { studentId } = req.params;
-    
+
     const userId = getUserId(req.user);
     const institution = await Institution.findOne({ userId: userId });
     if (!institution) {
       return res.status(404).json({ success: false, message: 'Institution not found' });
     }
-    
+
     // Find approved request for this student
     const approvedRequest = institution.requestedStudents.find(
       req => req.student.toString() === studentId && req.status === 'approved'
     );
-    
+
     if (!approvedRequest) {
-      return res.status(403).json({ 
-        success: false, 
-        message: 'You don\'t have permission to view this student\'s progress' 
+      return res.status(403).json({
+        success: false,
+        message: 'You don\'t have permission to view this student\'s progress'
       });
     }
-    
+
     const student = await Student.findById(studentId).select('-transcriptRequests');
     if (!student) {
       return res.status(404).json({ success: false, message: 'Student not found' });
     }
-    
+
     res.status(200).json({ success: true, data: student });
   } catch (err) {
     next(err);
@@ -156,16 +161,19 @@ exports.getRequests = async (req, res, next) => {
     const institution = await Institution.findOne({ userId: userId })
       // Populate more student fields to ensure data is available
       .populate('requestedStudents.student', 'firstName lastName studentId department program');
-    
+    // We don't need to explicitly select supportingDocuments here if it's already part of the requestedStudents subdocument schema.
+    // However, it's good to ensure it's there on the model if not already.
+
     if (!institution) {
       return res.status(404).json({ success: false, message: 'Institution not found' });
     }
-    
+
     res.status(200).json({ success: true, data: institution.requestedStudents });
   } catch (err) {
     next(err);
   }
 };
+
 exports.requestStudentTranscript = async (req, res, next) => {
   try {
     const { studentId } = req.params;
@@ -249,34 +257,46 @@ exports.downloadApprovedStudentTranscript = async (req, res, next) => {
     const { studentId } = req.params;
     const userId = getUserId(req.user);
 
-    const institution = await Institution.findOne({ userId: userId });
+    // Find the institution and populate its transcript requests to check status
+    // Populate 'transcriptRequests.student' to get student details for the PDF
+    const institution = await Institution.findOne({ userId: userId })
+      .populate('transcriptRequests.student');
+
     if (!institution) {
-      return res.status(404).json({ success: false, message: 'Institution not found' });
+      return res.status(404).json({ success: false, message: 'Institution not found.' });
     }
 
-    // Check if there's an approved transcript request for this student
+    // Crucial: Check for an approved transcript request for this student by this institution
     const approvedRequest = institution.transcriptRequests.find(
-      req => req.student.toString() === studentId && req.status === 'approved'
+      reqItem => reqItem.student && reqItem.student._id.toString() === studentId && reqItem.status === 'approved'
     );
 
     if (!approvedRequest) {
+      // If no approved request is found, deny access
       return res.status(403).json({
         success: false,
-        message: 'You do not have an approved transcript request for this student.'
+        message: 'You do not have an approved transcript request for this student or the request is not yet approved.'
       });
     }
 
-    // Reuse the logic from the studentController's downloadTranscript function
-    // You might want to abstract this PDF generation into a helper for reusability.
-    const student = await Student.findById(studentId).populate('userId');
+    // Get the student object directly from the populated approved request
+    const student = approvedRequest.student;
+
     if (!student) {
-      return res.status(404).json({ success: false, message: 'Student not found' });
+      // This is a fallback, should ideally not happen if populate worked correctly
+      return res.status(404).json({ success: false, message: 'Student data not available in the approved request.' });
     }
 
-    // Sort courses by year and semester
+    // --- Start PDF Generation Logic (adapted from your admin's generateTranscript) ---
+
+    // Sort courses by year and semester (corrected semester comparison for strings)
     const sortedCourses = [...student.courses].sort((a, b) => {
-      if (a.yearTaken !== b.yearTaken) return a.yearTaken - b.yearTaken;
-      return a.semester - b.semester;
+      if (a.yearTaken !== b.yearTaken) {
+        return a.yearTaken - b.yearTaken;
+      }
+      // Assuming semester is a string (e.g., "Fall", "Spring"). Use localeCompare.
+      // If it's a number, ensure your data stores numbers and revert to `a.semester - b.semester`.
+      return a.semester.localeCompare(b.semester);
     });
 
     // Calculate GPA
@@ -285,12 +305,16 @@ exports.downloadApprovedStudentTranscript = async (req, res, next) => {
     let totalCredits = 0;
 
     student.courses.forEach(course => {
-      totalPoints += gradePoints[course.grade] * course.credits;
-      totalCredits += course.credits;
+      // Ensure grade exists and is in gradePoints map
+      if (gradePoints[course.grade] !== undefined) {
+        totalPoints += gradePoints[course.grade] * course.credits;
+        totalCredits += course.credits;
+      }
     });
 
-    const gpa = totalCredits > 0 ? (totalPoints / totalCredits).toFixed(2) : 0;
+    const gpa = totalCredits > 0 ? (totalPoints / totalCredits).toFixed(2) : 'N/A';
 
+    // HTML template for transcript
     const html = `
       <!DOCTYPE html>
       <html>
@@ -313,9 +337,9 @@ exports.downloadApprovedStudentTranscript = async (req, res, next) => {
       <body>
         <div class="header">
           <h1>OFFICIAL TRANSCRIPT</h1>
-          <h2>${student.institution ? student.institution.name : 'University Name'}</h2>
-        </div>
-        
+          <h1>Requested by ${institution.name}</h1>
+          <h2>University of Rwanda</h2> </div>
+
         <div class="student-info">
           <table>
             <tr>
@@ -338,7 +362,7 @@ exports.downloadApprovedStudentTranscript = async (req, res, next) => {
             </tr>
           </table>
         </div>
-        
+
         <table class="course-table">
           <thead>
             <tr>
@@ -363,11 +387,11 @@ exports.downloadApprovedStudentTranscript = async (req, res, next) => {
             `).join('')}
           </tbody>
         </table>
-        
+
         <div class="gpa">
           Cumulative GPA: ${gpa}
         </div>
-        
+
         <div class="footer">
           <p>This is an official document. Any alteration makes it invalid.</p>
           <p>Registrar's Signature: _________________________</p>
@@ -384,26 +408,29 @@ exports.downloadApprovedStudentTranscript = async (req, res, next) => {
         right: '0.5in',
         bottom: '0.5in',
         left: '0.5in'
-      }
+      },
+      // phantomPath: '/path/to/phantomjs/bin/phantomjs' // Uncomment and set if you have issues with phantomjs path
     };
 
     // Generate PDF
     pdf.create(html, options).toBuffer((err, buffer) => {
       if (err) {
         console.error('PDF generation error:', err);
-        return next(err);
+        return res.status(500).json({ success: false, message: 'Failed to generate transcript PDF. Please check server logs.' });
       }
-      
+
       res.set({
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename=transcript_${student.studentId}.pdf`,
         'Content-Length': buffer.length
       });
-      
-      res.send(buffer);
+
+      res.send(buffer); // Send the PDF buffer
     });
 
   } catch (err) {
-    next(err);
+    console.error('Error in downloadApprovedStudentTranscript:', err);
+    // Ensure all unhandled errors also send a JSON response
+    res.status(500).json({ success: false, message: 'Internal server error during transcript download.' });
   }
 };
