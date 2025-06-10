@@ -29,6 +29,7 @@ import StudentProgress from './pages/admin/StudentProgress';
 import StudentRequestForm from './pages/institution/StudentRequestForm';
 import RequestTranscriptForm from './pages/institution/RequestTranscriptForm';
 import InstitutionTranscriptRequests from './pages/institution/InstitutionTranscriptRequests';
+import CourseManagement from './pages/admin/CourseManagement';
 
 // Components
 import Navbar from './components/layout/Navbar';
@@ -74,6 +75,7 @@ function App() {
             <Route path="students" element={<AdminStudents />} />
             <Route path="requests" element={<AdminRequests />} />
             <Route path='approved' element={<ApprovedProgressTable />} />
+            <Route path="courses" element={<CourseManagement />} />
             <Route path="students/:studentId/progress" element={<StudentProgress />} />
             <Route path="transcripts" element={<AdminTranscripts />} />
           </Route>

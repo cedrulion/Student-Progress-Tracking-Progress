@@ -3,7 +3,8 @@ const mongoose = require('mongoose');
 const courseSchema = new mongoose.Schema({
   code: {
     type: String,
-    required: true
+    required: true,
+    unique: true // Added unique constraint for course codes
   },
   name: {
     type: String,
@@ -11,24 +12,51 @@ const courseSchema = new mongoose.Schema({
   },
   semester: {
     type: String,
-    required: true
+    required: true,
+    enum: ['Fall', 'Spring', 'Summer'] // Added enum for semesters
   },
-  grade: {
-    type: String,
-    enum: ['A', 'B', 'C', 'D', 'E', 'F'],
-    required: true
+  year: {
+    type: String, // Changed to String to accommodate 'Year 1', 'Year 2'
+    required: true,
+    enum: ['Year 1', 'Year 2', 'Year 3', 'Year 4'] // Added enum for years
   },
   credits: {
     type: Number,
     required: true
   },
+  prerequisites: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Course'
+  }]
+});
+
+const studentCourseSchema = new mongoose.Schema({
+  course: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Course',
+    
+  },
+  grade: {
+    type: String,
+    enum: ['A', 'B', 'C', 'D', 'E', 'F', 'N/A'],
+    default: 'N/A'
+  },
+  marks: {
+    type: Number,
+    default: 0
+  },
   isRetake: {
     type: Boolean,
     default: false
   },
-  yearTaken: {
+  yearTaken: { // This refers to the actual academic year (e.g., 2023)
     type: Number,
     required: true
+  },
+  semesterTaken: { // This refers to the actual semester (e.g., Fall, Spring)
+    type: String,
+   
+    enum: ['Fall', 'Spring', 'Summer']
   }
 });
 
@@ -64,7 +92,7 @@ const studentSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
-  courses: [courseSchema],
+  courses: [studentCourseSchema],
   gpa: {
     type: Number,
     default: 0
@@ -89,24 +117,34 @@ const studentSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Calculate GPA before saving
-studentSchema.pre('save', function(next) {
+studentSchema.pre('save', async function(next) {
   if (this.courses && this.courses.length > 0) {
     const gradePoints = {
-      'A': 5, 'B': 4, 'C': 3, 'D': 2, 'E': 1, 'F': 0
+      'A': 5, // Assuming a 5.0 scale for GPA calculation
+      'B': 4,
+      'C': 3,
+      'D': 2,
+      'E': 1,
+      'F': 0,
+      'N/A': 0
     };
-    
     let totalCredits = 0;
     let totalPoints = 0;
-    
-    this.courses.forEach(course => {
-      totalCredits += course.credits;
-      totalPoints += gradePoints[course.grade] * course.credits;
-    });
-    
-    this.gpa = totalPoints / totalCredits;
+
+    for (const studentCourse of this.courses) {
+      const courseDetails = await mongoose.model('Course').findById(studentCourse.course);
+      if (courseDetails && studentCourse.grade !== 'N/A') {
+        totalCredits += courseDetails.credits;
+        totalPoints += gradePoints[studentCourse.grade] * courseDetails.credits;
+      }
+    }
+
+    this.gpa = totalCredits > 0 ? totalPoints / totalCredits : 0;
   }
   next();
 });
 
-module.exports = mongoose.model('Student', studentSchema);
+const Course = mongoose.model('Course', courseSchema);
+const Student = mongoose.model('Student', studentSchema);
+
+module.exports = { Student, Course };

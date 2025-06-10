@@ -1,5 +1,5 @@
 const User = require('../models/User');
-const Student = require('../models/Student');
+const { Student, Course } = require('../models/Student');
 const Institution = require('../models/Institution');
 const jwt = require('jsonwebtoken');
 const config = require('../config/config');

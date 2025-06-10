@@ -14,6 +14,7 @@ router.post('/request-progress/:studentId',
     institutionController.requestStudentProgress
   );
 router.get('/student-progress/:studentId', institutionController.getStudentProgress);
+router.get('/students/:studentId/remaining-courses', institutionController.getRemainingCourses);
 router.get('/students', institutionController.getAllStudents);
 router.get('/requests', institutionController.getRequests);
 router.post('/request-transcript/:studentId',

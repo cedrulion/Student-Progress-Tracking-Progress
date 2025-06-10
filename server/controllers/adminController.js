@@ -1,93 +1,109 @@
-const Student = require('../models/Student');
+// controllers/adminController.js
+const { Student, Course } = require('../models/Student');
 const Institution = require('../models/Institution');
 const User = require('../models/User');
 const pdf = require('html-pdf');
 const fs = require('fs');
 const path = require('path');
-const multer = require('multer'); // Import multer
+const multer = require('multer');
 
-// Configure Multer storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    // Ensure the uploads directory exists
     const uploadPath = path.join(__dirname, '../uploads');
-    fs.mkdirSync(uploadPath, { recursive: true });
+    fs.mkdirSync(uploadPath, {
+      recursive: true
+    });
     cb(null, uploadPath);
   },
   filename: (req, file, cb) => {
     cb(null, `${Date.now()}-${file.originalname}`);
   }
 });
-
-const upload = multer({ storage: storage }); // Create the upload middleware
+const upload = multer({
+  storage: storage
+});
 
 const getUserId = (user) => {
   return user._id || user.id;
 };
 
-// Verify institution
 exports.verifyInstitution = async (req, res, next) => {
   try {
-    const { institutionId } = req.params;
-    const { status } = req.body; // 'verified' or 'rejected'
+    const {
+      institutionId
+    } = req.params;
+    const {
+      status
+    } = req.body;
 
     if (!['verified', 'rejected'].includes(status)) {
-      return res.status(400).json({ success: false, message: 'Invalid verification status provided.' });
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid verification status provided.'
+      });
     }
-
     const institution = await Institution.findById(institutionId);
     if (!institution) {
-      return res.status(404).json({ success: false, message: 'Institution not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Institution not found'
+      });
     }
-
     institution.verificationStatus = status;
     await institution.save();
 
-    res.status(200).json({ success: true, data: institution });
+    res.status(200).json({
+      success: true,
+      data: institution
+    });
   } catch (err) {
     next(err);
   }
 };
 
-// NEW: Approve/Reject an Institution's Transcript Request
-// This now correctly targets the transcriptRequests array on the Institution model
 exports.respondToTranscriptRequest = async (req, res, next) => {
   try {
-    const { institutionId, requestId } = req.params;
-    const { status } = req.body; // 'approved' or 'rejected'
-    // Access uploaded files if any
-    const files = req.files; // req.files will be an array of file objects if using upload.array()
-
+    const {
+      institutionId,
+      requestId
+    } = req.params;
+    const {
+      status
+    } = req.body;
+    const files = req.files;
     if (!['approved', 'rejected'].includes(status)) {
-      return res.status(400).json({ success: false, message: 'Invalid status provided. Must be "approved" or "rejected".' });
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status provided. Must be "approved" or "rejected".'
+      });
     }
-
     const institution = await Institution.findById(institutionId);
     if (!institution) {
-      return res.status(404).json({ success: false, message: 'Institution not found.' });
+      return res.status(404).json({
+        success: false,
+        message: 'Institution not found.'
+      });
     }
-
     const transcriptRequest = institution.transcriptRequests.id(requestId);
     if (!transcriptRequest) {
-      return res.status(404).json({ success: false, message: 'Transcript request not found within this institution.' });
+      return res.status(404).json({
+        success: false,
+        message: 'Transcript request not found within this institution.'
+      });
     }
-
-    // Only allow status change if it's currently pending
     if (transcriptRequest.status !== 'pending') {
-      return res.status(400).json({ success: false, message: `Request is already ${transcriptRequest.status}.` });
+      return res.status(400).json({
+        success: false,
+        message: `Request is already ${transcriptRequest.status}.`
+      });
     }
-
     transcriptRequest.status = status;
     transcriptRequest.processedAt = new Date();
 
-    // Add supporting documents if provided (optional)
     if (files && files.length > 0) {
-      // Map file paths from multer's file objects
       transcriptRequest.supportingDocuments = files.map(file => `/uploads/${file.filename}`);
     }
-
     await institution.save();
-
     res.status(200).json({
       success: true,
       message: `Transcript request for student ${transcriptRequest.student} by ${institution.name} has been ${status}.`,
@@ -100,146 +116,412 @@ exports.respondToTranscriptRequest = async (req, res, next) => {
   }
 };
 
-
-// Approve institution's student progress request
 exports.approveProgressRequest = async (req, res, next) => {
   try {
-    const { institutionId, requestId } = req.params;
-    const { status } = req.body; // 'approved' or 'rejected'
-    // Access uploaded files if any
-    const files = req.files; // req.files will be an array of file objects if using upload.array()
+    const {
+      institutionId,
+      requestId
+    } = req.params;
+    const {
+      status
+    } = req.body;
+    const files = req.files;
 
     if (!['approved', 'rejected'].includes(status)) {
-      return res.status(400).json({ success: false, message: 'Invalid status provided. Must be "approved" or "rejected".' });
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status provided. Must be "approved" or "rejected".'
+      });
     }
-
     const institution = await Institution.findById(institutionId);
     if (!institution) {
-      return res.status(404).json({ success: false, message: 'Institution not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Institution not found'
+      });
     }
-
     const request = institution.requestedStudents.id(requestId);
     if (!request) {
-      return res.status(404).json({ success: false, message: 'Progress request not found.' });
+      return res.status(404).json({
+        success: false,
+        message: 'Progress request not found.'
+      });
     }
 
-    // Only allow status change if it's currently pending
     if (request.status !== 'pending') {
-      return res.status(400).json({ success: false, message: `Progress request is already ${request.status}.` });
+      return res.status(400).json({
+        success: false,
+        message: `Progress request is already ${request.status}.`
+      });
     }
 
     request.status = status;
-    request.processedAt = new Date(); // Add processedAt timestamp
+    request.processedAt = new Date();
 
-    // Add supporting documents if provided (optional)
     if (files && files.length > 0) {
-      // Map file paths from multer's file objects
       request.supportingDocuments = files.map(file => `/uploads/${file.filename}`);
     }
 
     await institution.save();
 
-    res.status(200).json({ success: true, data: institution });
+    res.status(200).json({
+      success: true,
+      data: institution
+    });
   } catch (err) {
     console.error('Error approving progress request:', err);
     next(err);
   }
 };
 
-// Get all institutions
 exports.getAllInstitutions = async (req, res, next) => {
   try {
-    const institutions = await Institution.find().populate('userId', 'email role'); // Populate user info
-    res.status(200).json({ success: true, data: institutions });
+    const institutions = await Institution.find().populate('userId', 'email role');
+    res.status(200).json({
+      success: true,
+      data: institutions
+    });
   } catch (err) {
     next(err);
   }
 };
 
-// Get all students
 exports.getAllStudents = async (req, res, next) => {
   try {
-    const students = await Student.find().populate('userId', 'email role'); // Populate user info
-    res.status(200).json({ success: true, data: students });
+    const students = await Student.find().populate('userId', 'email role');
+    res.status(200).json({
+      success: true,
+      data: students
+    });
   } catch (err) {
     next(err);
   }
 };
 
-// Get student by ID
 exports.getStudentById = async (req, res, next) => {
   try {
-    const student = await Student.findById(req.params.id).populate('userId', 'email role');
+    const student = await Student.findById(req.params.id)
+      .populate('userId', 'email role')
+      .populate('courses.course');
     if (!student) {
-      return res.status(404).json({ success: false, message: 'Student not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found'
+      });
     }
-    res.status(200).json({ success: true, data: student });
+    res.status(200).json({
+      success: true,
+      data: student
+    });
   } catch (err) {
     next(err);
   }
 };
 
-// Get student courses
 exports.getStudentCourses = async (req, res, next) => {
   try {
-    const student = await Student.findById(req.params.id);
+    const student = await Student.findById(req.params.id).populate('courses.course');
     if (!student) {
-      return res.status(404).json({ success: false, message: 'Student not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found'
+      });
     }
-    res.status(200).json({ success: true, data: student.courses });
+    res.status(200).json({
+      success: true,
+      data: student.courses
+    });
   } catch (err) {
     next(err);
   }
 };
 
-// Add course to student
-exports.addStudentCourse = async (req, res, next) => {
+exports.addCourse = async (req, res, next) => {
   try {
-    const student = await Student.findById(req.params.id);
-    if (!student) {
-      return res.status(404).json({ success: false, message: 'Student not found' });
-    }
+    const {
+      code,
+      name,
+      semester,
+      year,
+      credits,
+      prerequisites
+    } = req.body;
 
-    student.courses.push(req.body);
-    await student.save();
+    const newCourse = await Course.create({
+      code,
+      name,
+      semester,
+      year,
+      credits,
+      prerequisites
+    });
 
-    res.status(201).json({ success: true, data: student.courses });
+    res.status(201).json({
+      success: true,
+      data: newCourse
+    });
   } catch (err) {
     next(err);
   }
 };
 
-// Delete student course
+// New function to get all courses
+exports.getAllCourses = async (req, res, next) => {
+  try {
+    const courses = await Course.find().populate('prerequisites', 'code name');
+    res.status(200).json({
+      success: true,
+      data: courses
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// New function to update a course
+exports.updateCourse = async (req, res, next) => {
+  try {
+    const {
+      id
+    } = req.params;
+    const updateData = req.body;
+
+    const course = await Course.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: true
+    });
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: course
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// New function to delete a course
+exports.deleteCourse = async (req, res, next) => {
+  try {
+    const {
+      id
+    } = req.params;
+
+    const course = await Course.findByIdAndDelete(id);
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Course deleted successfully'
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+
+exports.assignCourseToStudent = async (req, res, next) => {
+    try {
+        const { studentId } = req.params;
+        const {
+            courseId,
+            grade,
+            marks,
+            isRetake,
+            yearTaken,
+            semesterTaken
+        } = req.body;
+  
+        console.log('Backend received:', { courseId, grade, marks, isRetake, yearTaken, semesterTaken });
+        console.log('Type of courseId in backend:', typeof courseId);
+        console.log('Type of semesterTaken in backend:', typeof semesterTaken);
+  
+        const student = await Student.findById(studentId).populate('courses.course'); // Keep populate for prerequisite check
+        if (!student) {
+            return res.status(404).json({
+                success: false,
+                message: 'Student not found'
+            });
+        }
+  
+        // --- Retake Limit Check ---
+        const retakeCount = student.courses.filter(sc => sc.isRetake === true).length;
+        if (retakeCount >= 3) {
+            return res.status(403).json({
+                success: false,
+                message: 'Student cannot continue; they have 3 or more retakes.'
+            });
+        }
+  
+        const courseToAssign = await Course.findById(courseId);
+        if (!courseToAssign) {
+            return res.status(404).json({
+                success: false,
+                message: 'Course not found'
+            });
+        }
+  
+        // --- Prerequisite Check ---
+        if (courseToAssign.prerequisites && courseToAssign.prerequisites.length > 0) {
+            for (const prereqId of courseToAssign.prerequisites) {
+                // Ensure student.courses.course is populated for this check
+                const hasPrereq = student.courses.some(
+                    sc => sc.course && sc.course._id.toString() === prereqId.toString() && ['A', 'B', 'C', 'D'].includes(sc.grade)
+                );
+                if (!hasPrereq) {
+                    const prereqCourse = await Course.findById(prereqId); // This needs to fetch the course name for the message
+                    return res.status(400).json({
+                        success: false,
+                        message: `Prerequisite course "${prereqCourse ? prereqCourse.name : 'Unknown'}" not completed by student.`
+                    });
+                }
+            }
+        }
+  
+        // --- Duplicate Course Check (Optional, but good practice) ---
+        const alreadyAssigned = student.courses.some(sc =>
+            sc.course && sc.course._id.toString() === courseId.toString() &&
+            sc.yearTaken === yearTaken &&
+            sc.semesterTaken === semesterTaken
+        );
+        if (alreadyAssigned) {
+            return res.status(400).json({
+                success: false,
+                message: 'This course is already assigned to the student for the specified semester and year.'
+            });
+        }
+  
+        // --- THE CRITICAL CHANGE HERE ---
+        // Get the Student's subdocument schema directly
+        const StudentCourse = student.schema.path('courses').caster;
+  
+        // Create a new instance of the subdocument schema
+        const newStudentCourse = new StudentCourse({
+            course: courseId, // Mongoose will handle converting this to ObjectId if valid
+            grade: grade || 'N/A',
+            marks: marks || 0,
+            isRetake: isRetake || false,
+            yearTaken,
+            semesterTaken
+        });
+  
+        console.log('New student course object created as subdocument instance:', newStudentCourse);
+  
+        student.courses.push(newStudentCourse);
+        await student.save();
+  
+        res.status(201).json({
+            success: true,
+            message: 'Course assigned successfully', // Added for better response
+            data: student.courses // Or just the newStudentCourse if you prefer
+        });
+  
+    } catch (err) {
+        // Log the full error object for detailed debugging
+        console.error('Error assigning course to student (from catch block):', err);
+  
+        // Check if it's a Mongoose validation error
+        if (err.name === 'ValidationError') {
+            const errors = Object.keys(err.errors).map(key => err.errors[key].message).join(', ');
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors
+            });
+        }
+  
+        next(err); // Pass other errors to the next middleware
+    }
+  };
+  
+
+exports.getRemainingCourses = async (req, res, next) => {
+  try {
+    const {
+      studentId
+    } = req.params;
+
+    const student = await Student.findById(studentId).populate('courses.course');
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found'
+      });
+    }
+
+    const allCourses = await Course.find();
+    const studentCompletedCourseIds = student.courses
+      .filter(sc => ['A', 'B', 'C', 'D'].includes(sc.grade))
+      .map(sc => sc.course._id.toString());
+
+    const remainingCourses = allCourses.filter(course => {
+      const isAlreadyTaken = student.courses.some(sc => sc.course._id.toString() === course._id.toString());
+      if (isAlreadyTaken) {
+        return false;
+      }
+
+      const hasMetPrerequisites = course.prerequisites.every(prereqId =>
+        studentCompletedCourseIds.includes(prereqId.toString())
+      );
+      return hasMetPrerequisites;
+    });
+
+    res.status(200).json({
+      success: true,
+      data: remainingCourses
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+
 exports.deleteStudentCourse = async (req, res, next) => {
   try {
     const student = await Student.findById(req.params.studentId);
     if (!student) {
-      return res.status(404).json({ success: false, message: 'Student not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found'
+      });
     }
 
     student.courses = student.courses.filter(
-      course => course._id.toString() !== req.params.courseId
+      studentCourse => studentCourse._id.toString() !== req.params.studentCourseId
     );
     await student.save();
 
-    res.status(200).json({ success: true, data: student.courses });
+    res.status(200).json({
+      success: true,
+      data: student.courses
+    });
   } catch (err) {
     next(err);
   }
 };
 
-// Get all pending requests (transcript and progress)
 exports.getPendingRequests = async (req, res, next) => {
   try {
-    // Get transcript requests from Institutions
     const institutionsWithPendingTranscripts = await Institution.find({
       'transcriptRequests.status': 'pending'
     }).populate('transcriptRequests.student', 'firstName lastName studentId program department');
-
     const transcriptRequests = [];
     institutionsWithPendingTranscripts.forEach(institution => {
       institution.transcriptRequests.forEach(request => {
-        if (request.status === 'pending' && request.student) { // Ensure student data is populated
+        if (request.status === 'pending' && request.student) {
           transcriptRequests.push({
             _id: request._id,
             institution: {
@@ -258,15 +540,14 @@ exports.getPendingRequests = async (req, res, next) => {
             },
             requestDate: request.requestDate,
             purpose: request.purpose,
-            justification: request.justification, // Add justification from model
-            consentForm: request.consentForm, // Add consentForm from model
-            supportingDocuments: request.supportingDocuments // Include supporting documents
+            justification: request.justification,
+            consentForm: request.consentForm,
+            supportingDocuments: request.supportingDocuments
           });
         }
       });
     });
 
-    // Get progress requests from Institutions
     const institutionsWithPendingProgress = await Institution.find({
       'requestedStudents.status': 'pending'
     }).populate('requestedStudents.student', 'firstName lastName studentId program department');
@@ -296,7 +577,7 @@ exports.getPendingRequests = async (req, res, next) => {
             justification: request.justification,
             requestedData: request.requestedData,
             consentForm: request.consentForm,
-            supportingDocuments: request.supportingDocuments // Include supporting documents
+            supportingDocuments: request.supportingDocuments
           });
         }
       });
@@ -315,86 +596,102 @@ exports.getPendingRequests = async (req, res, next) => {
   }
 };
 
-// Get pending transcript requests (specific to transcripts, from Institutions)
 exports.getPendingTranscripts = async (req, res, next) => {
   try {
-    const institutions = await Institution.find({ 'transcriptRequests.status': 'pending' })
+    const institutions = await Institution.find({
+        'transcriptRequests.status': 'pending'
+      })
       .populate('transcriptRequests.student', 'firstName lastName studentId program department');
-
     const requests = institutions.flatMap(institution =>
       institution.transcriptRequests
-        .filter(req => req.status === 'pending')
-        .map(req => ({
-          ...req.toObject(),
-          institution: {
-            _id: institution._id,
-            name: institution.name,
-            contactEmail: institution.contactEmail
-          },
-          student: {
-            _id: req.student._id,
-            firstName: req.student.firstName,
-            lastName: req.student.lastName,
-            studentId: req.student.studentId
-          },
-          supportingDocuments: req.supportingDocuments // Include supporting documents
-        }))
+      .filter(req => req.status === 'pending')
+      .map(req => ({
+        ...req.toObject(),
+        institution: {
+          _id: institution._id,
+          name: institution.name,
+          contactEmail: institution.contactEmail
+        },
+        student: {
+          _id: req.student._id,
+          firstName: req.student.firstName,
+          lastName: req.student.lastName,
+          studentId: req.student.studentId
+        },
+        supportingDocuments: req.supportingDocuments
+      }))
     );
-
-    res.status(200).json({ success: true, data: requests });
+    res.status(200).json({
+      success: true,
+      data: requests
+    });
   } catch (err) {
     console.error('Error in getPendingTranscripts:', err);
     next(err);
   }
 };
 
-// Dashboard statistics - Individual count endpoints
 exports.getStudentCount = async (req, res, next) => {
   try {
     const count = await Student.countDocuments();
-    res.status(200).json({ success: true, count });
+    res.status(200).json({
+      success: true,
+      count
+    });
   } catch (err) {
     next(err);
   }
 };
-
 exports.getInstitutionCount = async (req, res, next) => {
   try {
     const count = await Institution.countDocuments();
-    res.status(200).json({ success: true, count });
+    res.status(200).json({
+      success: true,
+      count
+    });
   } catch (err) {
     next(err);
   }
 };
 
-// Count of pending transcript requests (from Institutions)
 exports.getPendingTranscriptsCount = async (req, res, next) => {
   try {
-    const count = await Institution.countDocuments({ 'transcriptRequests.status': 'pending' });
-    res.status(200).json({ success: true, count });
+    const count = await Institution.countDocuments({
+      'transcriptRequests.status': 'pending'
+    });
+    res.status(200).json({
+      success: true,
+      count
+    });
   } catch (err) {
     next(err);
   }
 };
-
 exports.getPendingProgressCount = async (req, res, next) => {
   try {
-    const count = await Institution.countDocuments({ 'requestedStudents.status': 'pending' });
-    res.status(200).json({ success: true, count });
+    const count = await Institution.countDocuments({
+      'requestedStudents.status': 'pending'
+    });
+    res.status(200).json({
+      success: true,
+      count
+    });
   } catch (err) {
     next(err);
   }
 };
-
 exports.getDashboardStats = async (req, res, next) => {
   try {
     const [studentsCount, institutionsCount, pendingTranscripts, pendingProgress] = await Promise.all([
       Student.countDocuments(),
       Institution.countDocuments(),
-      Institution.countDocuments({ 'transcriptRequests.status': 'pending' }), // Corrected
-      Institution.countDocuments({ 'requestedStudents.status': 'pending' })
+      Institution.countDocuments({
+        'transcriptRequests.status': 'pending'
+      }),
+      Institution.countDocuments({
+        'requestedStudents.status': 'pending'
+      })
     ]);
-
     res.status(200).json({
       success: true,
       data: {
@@ -408,7 +705,6 @@ exports.getDashboardStats = async (req, res, next) => {
     next(err);
   }
 };
-
 exports.getApprovedProgressRequests = async (req, res, next) => {
   try {
 
@@ -419,34 +715,33 @@ exports.getApprovedProgressRequests = async (req, res, next) => {
 
     const approvedRequests = institutions.flatMap(institution =>
       institution.requestedStudents
-        .filter(student => student.status === 'approved')
-        .map(request => ({
-          _id: request._id,
-          institution: {
-            _id: institution._id,
-            name: institution.name,
-            contactEmail: institution.contactEmail,
-            verificationStatus: institution.verificationStatus
-          },
-          student: {
-            _id: request.student._id,
-            firstName: request.student.firstName,
-            lastName: request.student.lastName,
-            studentId: request.student.studentId,
-            program: request.student.program,
-            department: request.student.department
-          },
-          requestDate: request.requestDate,
-          processedAt: request.processedAt,
-          purpose: request.purpose,
-          justification: request.justification,
-          requestedData: request.requestedData,
-          consentForm: request.consentForm,
-          status: request.status,
-          supportingDocuments: request.supportingDocuments // Include supporting documents
-        }))
+      .filter(student => student.status === 'approved')
+      .map(request => ({
+        _id: request._id,
+        institution: {
+          _id: institution._id,
+          name: institution.name,
+          contactEmail: institution.contactEmail,
+          verificationStatus: institution.verificationStatus
+        },
+        student: {
+          _id: request.student._id,
+          firstName: request.student.firstName,
+          lastName: request.student.lastName,
+          studentId: request.student.studentId,
+          program: request.student.program,
+          department: request.student.department
+        },
+        requestDate: request.requestDate,
+        processedAt: request.processedAt,
+        purpose: request.purpose,
+        justification: request.justification,
+        requestedData: request.requestedData,
+        consentForm: request.consentForm,
+        status: request.status,
+        supportingDocuments: request.supportingDocuments
+      }))
     );
-
     res.status(200).json({
       success: true,
       data: approvedRequests
@@ -457,65 +752,95 @@ exports.getApprovedProgressRequests = async (req, res, next) => {
   }
 };
 
-// Update student information
 exports.updateStudentCourse = async (req, res, next) => {
   try {
-    const { studentId, courseId } = req.params;
+    const {
+      studentId,
+      studentCourseId
+    } = req.params;
     const updateData = req.body;
 
     const student = await Student.findById(studentId);
     if (!student) {
-      return res.status(404).json({ success: false, message: 'Student not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found'
+      });
+    }
+    const studentCourse = student.courses.id(studentCourseId);
+    if (!studentCourse) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student course record not found'
+      });
     }
 
-    const course = student.courses.id(courseId);
-    if (!course) {
-      return res.status(404).json({ success: false, message: 'Course not found' });
-    }
-
-    // Update course fields
-    Object.assign(course, updateData);
+    Object.assign(studentCourse, updateData);
     await student.save();
 
-    res.status(200).json({ success: true, data: course });
+    res.status(200).json({
+      success: true,
+      data: studentCourse
+    });
   } catch (err) {
     next(err);
   }
 };
 
-
 exports.generateTranscript = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const student = await Student.findById(id).populate('userId').populate('institution'); // Populate institution if it's a ref
+    const student = await Student.findById(id).populate('userId').populate('courses.course');
 
     if (!student) {
-      return res.status(404).json({ success: false, message: 'Student not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found'
+      });
     }
 
-    // Sort courses by year and semester
-    const sortedCourses = [...student.courses].sort((a, b) => {
-      if (a.yearTaken !== b.yearTaken) {
-        return a.yearTaken - b.yearTaken;
+    // Group courses by sc.course.year
+    const coursesByYear = student.courses.reduce((acc, studentCourse) => {
+      const year = studentCourse.course && studentCourse.course.year ? studentCourse.course.year.toString() : 'N/A';
+      if (!acc[year]) {
+        acc[year] = [];
       }
-      return a.semester - b.semester;
+      acc[year].push(studentCourse);
+      return acc;
+    }, {});
+
+    const sortedYears = Object.keys(coursesByYear).sort((a, b) => {
+      if (a === 'N/A') return 1;
+      if (b === 'N/A') return -1;
+      return parseInt(a) - parseInt(b);
     });
 
-    // Calculate GPA
     const gradePoints = {
       'A': 4, 'B': 3, 'C': 2, 'D': 1, 'E': 0.5, 'F': 0
     };
     let totalPoints = 0;
     let totalCredits = 0;
 
-    student.courses.forEach(course => {
-      totalPoints += gradePoints[course.grade] * course.credits;
-      totalCredits += course.credits;
+    student.courses.forEach(studentCourse => {
+      if (studentCourse.course && studentCourse.grade !== 'N/A' && gradePoints[studentCourse.grade] !== undefined) {
+        totalPoints += gradePoints[studentCourse.grade] * studentCourse.course.credits;
+        totalCredits += studentCourse.course.credits;
+      }
     });
 
-    const gpa = totalCredits > 0 ? (totalPoints / totalCredits).toFixed(2) : 0;
+    const gpa = totalCredits > 0 ? (totalPoints / totalCredits).toFixed(2) : 'N/A';
 
-    // HTML template for transcript
+    const retakeCount = student.courses.filter(course => course.isRetake).length;
+
+    let retakeWarning = '';
+    if (retakeCount >= 3) {
+      retakeWarning = `
+        <div class="retake-warning">
+          <p><strong>IMPORTANT NOTICE:</strong> This student has accumulated <strong>${retakeCount} retakes</strong>, which exceeds the maximum allowed retakes at the University of Rwanda. Consequently, this student is <strong>no longer eligible to continue their studies</strong> at the University.</p>
+        </div>
+      `;
+    }
+
     const html = `
       <!DOCTYPE html>
       <html>
@@ -523,22 +848,50 @@ exports.generateTranscript = async (req, res, next) => {
         <meta charset="utf-8">
         <title>Transcript - ${student.firstName} ${student.lastName}</title>
         <style>
-          body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
-          .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
-          .student-info { margin-bottom: 30px; }
+          body { font-family: 'Times New Roman', Times, serif; margin: 0; padding: 20px; font-size: 11pt; }
+          .header { text-align: center; margin-bottom: 25px; border-bottom: 2px solid #000; padding-bottom: 12px; }
+          .header h1 { font-size: 20pt; color: #333; margin-bottom: 5px; }
+          .header h2 { font-size: 14pt; color: #555; margin-top: 0; }
+          .student-info { margin-bottom: 25px; border: 1px solid #ddd; padding: 15px; background-color: #f9f9f9; }
           .student-info table { width: 100%; border-collapse: collapse; }
-          .student-info td { padding: 5px; border: 1px solid #ddd; }
-          .course-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-          .course-table th, .course-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-          .course-table th { background-color: #f2f2f2; }
-          .footer { text-align: right; margin-top: 30px; font-style: italic; }
-          .gpa { font-weight: bold; margin-top: 20px; }
+          .student-info td { padding: 8px 12px; border: 1px solid #eee; }
+          .student-info strong { color: #333; }
+          .course-section { margin-bottom: 25px; page-break-inside: avoid; }
+          .course-year-heading {
+            font-size: 16pt;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            padding: 8px 0;
+            border-bottom: 2px solid #3498db;
+          }
+          .course-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+          .course-table th, .course-table td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+          .course-table th { background-color: #e0f2f7; color: #2c3e50; font-weight: bold; }
+          .grade-F { color: #e74c3c; font-weight: bold; }
+          .grade-pass { color: #27ae60; font-weight: bold; }
+          .retake-row { background-color: #ffebee; } /* Light red for retake rows */
+          .retake-status { color: #c0392b; font-weight: bold; } /* Darker red for 'Yes' */
+          .gpa-section { text-align: right; margin-top: 25px; padding: 15px; background-color: #ecf0f1; border-radius: 5px; border: 1px solid #c7d0d6; }
+          .gpa-section p { font-size: 14pt; font-weight: bold; color: #2980b9; margin: 0; }
+          .footer { text-align: center; margin-top: 40px; font-style: italic; color: #7f8c8d; font-size: 10pt; }
+          .retake-warning {
+            border: 2px solid #e74c3c;
+            background-color: #fbecec;
+            color: #c0392b;
+            padding: 15px;
+            margin-bottom: 30px;
+            text-align: center;
+            font-size: 12pt;
+            font-weight: bold;
+            border-radius: 8px;
+          }
         </style>
       </head>
       <body>
         <div class="header">
-          <h1>OFFICIAL TRANSCRIPT</h1>
-          <h2>${student.institution ? student.institution.name : 'University Name'}</h2>
+          <h1>OFFICIAL ACADEMIC TRANSCRIPT</h1>
+          <h2>University of Rwanda</h2>
         </div>
 
         <div class="student-info">
@@ -556,41 +909,54 @@ exports.generateTranscript = async (req, res, next) => {
               <td>${student.department || 'N/A'}</td>
             </tr>
             <tr>
-              <td><strong>Date of Birth:</strong></td>
-              <td>${student.dateOfBirth ? new Date(student.dateOfBirth).toLocaleDateString() : 'N/A'}</td>
               <td><strong>Date Issued:</strong></td>
-              <td>${new Date().toLocaleDateString()}</td>
+              <td>${new Date().toLocaleDateString('en-GB')}</td>
+              <td></td>
+              <td></td>
             </tr>
           </table>
         </div>
 
-        <table class="course-table">
-          <thead>
-            <tr>
-              <th>Code</th>
-              <th>Course Name</th>
-              <th>Semester</th>
-              <th>Year</th>
-              <th>Credits</th>
-              <th>Grade</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${sortedCourses.map(course => `
-              <tr>
-                <td>${course.code}</td>
-                <td>${course.name}</td>
-                <td>${course.semester}</td>
-                <td>${course.yearTaken}</td>
-                <td>${course.credits}</td>
-                <td>${course.grade}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
+        ${retakeWarning}
 
-        <div class="gpa">
-          Cumulative GPA: ${gpa}
+        ${sortedYears.map(year => `
+          <div class="course-section">
+            <h3 class="course-year-heading">Academic ${year}</h3>
+            <div class="overflow-x-auto">
+              <table class="course-table">
+                <thead>
+                  <tr>
+                    <th>Course Code</th>
+                    <th>Course Name</th>
+                    <th>Grade</th>
+                    <th>Retake</th>
+                    <th>Marks</th>
+                    <th>Semester</th>
+                    <th>Year</th>
+                    <th>Credits</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${coursesByYear[year].map(sc => `
+                    <tr class="${sc.isRetake ? 'retake-row' : ''}">
+                      <td>${sc.course ? sc.course.code : 'N/A'}</td>
+                      <td>${sc.course ? sc.course.name : 'N/A'}</td>
+                      <td class="${sc.grade === 'F' || sc.grade === 'E' ? 'grade-F' : 'grade-pass'}">${sc.grade}</td>
+                      <td class="${sc.isRetake ? 'retake-status' : ''}">${sc.isRetake ? 'Yes' : 'No'}</td>
+                      <td>${sc.marks !== undefined ? sc.marks : 'N/A'}</td>
+                      <td>${sc.semesterTaken || 'N/A'}</td>
+                      <td>${sc.course ? sc.course.year : 'N/A'}</td>
+                      <td>${sc.course ? sc.course.credits : 'N/A'}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `).join('')}
+
+        <div class="gpa-section">
+          <p>Cumulative GPA: ${gpa}</p>
         </div>
 
         <div class="footer">
@@ -601,7 +967,6 @@ exports.generateTranscript = async (req, res, next) => {
       </html>
     `;
 
-    // PDF options
     const options = {
       format: 'Letter',
       border: {
@@ -612,21 +977,18 @@ exports.generateTranscript = async (req, res, next) => {
       }
     };
 
-    // Generate PDF
     pdf.create(html, options).toBuffer((err, buffer) => {
       if (err) {
         console.error('PDF generation error:', err);
         return next(err);
       }
 
-      // Set response headers
       res.set({
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename=transcript_${student.studentId}.pdf`,
         'Content-Length': buffer.length
       });
 
-      // Send the PDF
       res.send(buffer);
     });
   } catch (err) {
@@ -635,19 +997,31 @@ exports.generateTranscript = async (req, res, next) => {
   }
 };
 
+
 exports.requestTranscript = async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const { purpose, institutionId } = req.body;
+    const {
+      id
+    } = req.params;
+    const {
+      purpose,
+      institutionId
+    } = req.body;
 
     const student = await Student.findById(id);
     if (!student) {
-      return res.status(404).json({ success: false, message: 'Student not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found'
+      });
     }
 
     const institution = await Institution.findById(institutionId);
     if (!institution) {
-      return res.status(404).json({ success: false, message: 'Target institution not found for request.' });
+      return res.status(404).json({
+        success: false,
+        message: 'Target institution not found for request.'
+      });
     }
 
     const existingRequest = institution.transcriptRequests.find(
@@ -655,7 +1029,10 @@ exports.requestTranscript = async (req, res, next) => {
     );
 
     if (existingRequest) {
-      return res.status(400).json({ success: false, message: 'A pending transcript request to this institution already exists for this student.' });
+      return res.status(400).json({
+        success: false,
+        message: 'A pending transcript request to this institution already exists for this student.'
+      });
     }
 
     const newRequest = {
@@ -664,11 +1041,13 @@ exports.requestTranscript = async (req, res, next) => {
       student: student._id,
       status: 'pending'
     };
-
     institution.transcriptRequests.push(newRequest);
     await institution.save();
-
-    res.status(201).json({ success: true, message: 'Transcript request sent to institution.', data: newRequest });
+    res.status(201).json({
+      success: true,
+      message: 'Transcript request sent to institution.',
+      data: newRequest
+    });
   } catch (err) {
     console.error('Error in requestTranscript (admin acting):', err);
     next(err);
@@ -677,17 +1056,20 @@ exports.requestTranscript = async (req, res, next) => {
 
 exports.getStudentTranscriptRequests = async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const student = await Student.findById(id); 
+    const {
+      id
+    } = req.params;
+    const student = await Student.findById(id);
 
     if (!student) {
-      return res.status(404).json({ success: false, message: 'Student not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found'
+      });
     }
-
- 
     const institutionsWithStudentRequests = await Institution.find({
       'transcriptRequests.student': id
-    }).populate('transcriptRequests.student', 'firstName lastName studentId'); t
+    }).populate('transcriptRequests.student', 'firstName lastName studentId');
 
     const studentRelatedRequests = [];
     institutionsWithStudentRequests.forEach(inst => {
@@ -702,52 +1084,60 @@ exports.getStudentTranscriptRequests = async (req, res, next) => {
             requestDate: req.requestDate,
             purpose: req.purpose,
             status: req.status,
-            supportingDocuments: req.supportingDocuments // Include supporting documents
+            supportingDocuments: req.supportingDocuments
           });
         }
       });
     });
 
-    res.status(200).json({ success: true, data: studentRelatedRequests });
+    res.status(200).json({
+      success: true,
+      data: studentRelatedRequests
+    });
   } catch (err) {
     console.error('Error in getStudentTranscriptRequests (admin looking up student requests):', err);
     next(err);
   }
 };
+
 exports.getApprovedTranscripts = async (req, res, next) => {
   try {
-    const institutions = await Institution.find({ 'transcriptRequests.status': 'approved' })
+    const institutions = await Institution.find({
+        'transcriptRequests.status': 'approved'
+      })
       .populate('transcriptRequests.student', 'firstName lastName studentId program department');
 
     const requests = institutions.flatMap(institution =>
       institution.transcriptRequests
-        .filter(req => req.status === 'approved')
-        .map(req => ({
-          ...req.toObject(),
-          institution: {
-            _id: institution._id,
-            name: institution.name,
-            contactEmail: institution.contactEmail,
-            verificationStatus: institution.verificationStatus // Include verification status
-          },
-          student: {
-            _id: req.student._id,
-            firstName: req.student.firstName,
-            lastName: req.student.lastName,
-            studentId: req.student.studentId,
-            program: req.student.program,
-            department: req.student.department
-          },
-          supportingDocuments: req.supportingDocuments // Include supporting documents
-        }))
+      .filter(req => req.status === 'approved')
+      .map(req => ({
+        ...req.toObject(),
+        institution: {
+          _id: institution._id,
+          name: institution.name,
+          contactEmail: institution.contactEmail,
+          verificationStatus: institution.verificationStatus
+        },
+        student: {
+          _id: req.student._id,
+          firstName: req.student.firstName,
+          lastName: req.student.lastName,
+          studentId: req.student.studentId,
+          program: req.student.program,
+          department: req.student.department
+        },
+        supportingDocuments: req.supportingDocuments
+      }))
     );
 
-    res.status(200).json({ success: true, data: requests });
+    res.status(200).json({
+      success: true,
+      data: requests
+    });
   } catch (err) {
     console.error('Error in getApprovedTranscripts:', err);
     next(err);
   }
 };
 
-// Export the upload middleware
 exports.upload = upload;
