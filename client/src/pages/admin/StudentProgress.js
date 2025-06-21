@@ -315,9 +315,9 @@ const StudentProgress = () => {
                                                     value={formData.semesterTaken}
                                                     onChange={handleChange}
                                                 >
-                                                    <option value="Fall">Semester 1</option>
-                                                    <option value="Spring">Semester 2</option>
-                                                    <option value="Summer">Semester 3</option>
+                                                    <option value="Semester 1">Semester 1</option>
+                                                    <option value="Semester 2">Semester 2</option>
+                                                    <option value="Semester 3">Semester 3</option>
                                                 </select>
                                                 {formErrors.semesterTaken && <p className="mt-2 text-sm text-red-600">{formErrors.semesterTaken}</p>}
                                             </div>
