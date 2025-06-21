@@ -1,21 +1,76 @@
 import { Link } from 'react-router-dom';
+import backgroundImage from '../Assets/graduate.png'; 
 
 const Home = () => {
   return (
-    <div className="py-12">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="lg:text-center">
-          <h2 className="text-base text-blue-600 font-semibold tracking-wide uppercase">
-            Student Progress Tracker
-          </h2>
-          <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-gray-900 sm:text-4xl">
-            A better way to track academic progress
-          </p>
-          <p className="mt-4 max-w-2xl text-xl text-gray-500 lg:mx-auto">
-            Secure, reliable, and easy-to-use platform for students and institutions to verify academic records.
-          </p>
+    <div className="">
+      {/* Changed max-w-9xl to max-w-7xl to match Navbar's max-width */}
+      <div className=" px-4 sm:px-6 lg:px-8"> 
+        <div className="relative max-w-7xl bg-gradient-to-br from-slate-500 via-blue-600 to-indigo-900">
+          {/* Background Image with Enhanced Overlay */}
+          <div className="absolute inset-0">
+            <img
+              src={backgroundImage}
+              alt="Academic Excellence"
+              className="w-full h-full object-cover opacity-20"
+            />
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-900/80 via-blue-900/70 to-indigo-900/80"></div>
+            {/* Animated Geometric Elements */}
+            <div className="absolute top-20 left-10 w-32 h-32 bg-blue-400/10 rounded-full blur-xl animate-pulse"></div>
+            <div className="absolute bottom-20 right-10 w-48 h-48 bg-indigo-400/10 rounded-full blur-xl animate-pulse delay-1000"></div>
+          </div>
+
+          {/* This div already has max-w-7xl, so it's consistent */}
+          <div className="relative max-w-7xl mx-auto py-32 px-4 sm:py-40 sm:px-6 lg:px-8 text-center">
+            {/* Badge */}
+
+
+            {/* Main Headline */}
+            <h1 className="text-xl sm:text-xl md:text-xl lg:text-xl font-black tracking-tight text-white leading-none mb-8">
+              Student Progress Tracker
+            </h1>
+
+            {/* Subtitle */}
+            <p className="max-w-4xl mx-auto text-xl sm:text-2xl text-slate-200 leading-relaxed mb-12 font-light">
+              A better way to track academic progress Secure, reliable, and easy-to-use platform for students and institutions to verify academic records.
+            </p>
+
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row justify-center gap-6 mb-16">
+              <Link
+                to="/register?role=student"
+                className="group relative px-10 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-2xl shadow-2xl hover:shadow-blue-500/25 transition-all duration-300 transform hover:scale-105 hover:-translate-y-1"
+              >
+                <span className="relative z-10">Start Your Journey</span>
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              </Link>
+              <Link
+                to="/register?role=institution"
+                className="group px-10 py-4 bg-white/10 backdrop-blur-sm text-white font-semibold rounded-2xl border border-white/20 hover:bg-white/20 hover:border-white/40 transition-all duration-300 transform hover:scale-105 hover:-translate-y-1"
+              >
+                Institution Portal
+              </Link>
+            </div>
+
+            {/* Trust Indicators */}
+            <div className="flex flex-wrap justify-center items-center gap-8 text-slate-400">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                <span className="text-sm">Blockchain Secured</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                <span className="text-s">Globally Trusted</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
+                <span className="text-sm">Instantly Verifiable</span>
+              </div>
+            </div>
+          </div>
         </div>
 
+        {/* This div also needs adjustment if it's meant to follow the main content width */}
         <div className="mt-20">
           <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
             <div className="bg-white p-6 rounded-lg shadow-md">

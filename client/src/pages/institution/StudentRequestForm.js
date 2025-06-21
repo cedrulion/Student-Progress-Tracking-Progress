@@ -2,7 +2,21 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import Spinner from '../../components/ui/Spinner';
+
+// Simple Spinner component included directly to resolve the import error
+const Spinner = ({ size = 'md' }) => {
+  const sizeClasses = {
+    sm: 'h-4 w-4',
+    md: 'h-8 w-8',
+    lg: 'h-12 w-12',
+  };
+
+  return (
+    <div className={`inline-block animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] text-white motion-reduce:animate-[spin_1.5s_linear_infinite] ${sizeClasses[size]}`} role="status">
+      <span className="!absolute !-m-px !h-px !w-px !overflow-hidden !whitespace-nowrap !border-0 !p-0 ![clip:rect(0,0,0,0)]">Loading...</span>
+    </div>
+  );
+};
 
 const StudentRequestForm = () => {
   const { studentId } = useParams();
@@ -17,7 +31,6 @@ const StudentRequestForm = () => {
 
   const dataOptions = [
     { id: 'academic_records', name: 'Academic Records' },
-
   ];
 
   const handleChange = (e) => {
@@ -50,7 +63,6 @@ const StudentRequestForm = () => {
       formDataToSend.append('purpose', formData.purpose);
       formDataToSend.append('justification', formData.justification);
       
-      // Append each requestedData item
       formData.requestedData.forEach(item => {
         formDataToSend.append('requestedData', item);
       });
@@ -86,14 +98,14 @@ const StudentRequestForm = () => {
             <h2 className="text-2xl font-bold text-white">
               Request Student Information
             </h2>
-            <p className="mt-1 text-blue-100">
+            <p className="mt-1 text-base text-blue-100">
               Please provide details about your request for academic information
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="px-6 py-6 space-y-6">
             <div className="space-y-1">
-              <label htmlFor="purpose" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="purpose" className="block text-base font-semibold text-black">
                 Purpose of Request *
               </label>
               <select
@@ -101,7 +113,7 @@ const StudentRequestForm = () => {
                 name="purpose"
                 value={formData.purpose}
                 onChange={handleChange}
-                className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+                className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-base rounded-md text-black"
                 required
               >
                 <option value="">Select a purpose</option>
@@ -115,23 +127,23 @@ const StudentRequestForm = () => {
 
             {formData.purpose === 'other' && (
               <div className="space-y-1">
-                <label htmlFor="customPurpose" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="customPurpose" className="block text-base font-semibold text-black">
                   Please specify *
                 </label>
                 <input
                   type="text"
                   id="customPurpose"
                   name="customPurpose"
-                  className="mt-1 block w-full shadow-sm sm:text-sm focus:ring-blue-500 focus:border-blue-500 border-gray-300 rounded-md"
+                  className="mt-1 block w-full shadow-sm sm:text-base focus:ring-blue-500 focus:border-blue-500 border-gray-300 rounded-md text-black"
                   required
                 />
               </div>
             )}
 
             <div className="space-y-1">
-              <label htmlFor="justification" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="justification" className="block text-base font-semibold text-black">
                 Justification for Request *
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-sm text-gray-800 mt-1 font-normal">
                   Please explain in detail why you need this student's information and how it will be used.
                 </p>
               </label>
@@ -141,16 +153,16 @@ const StudentRequestForm = () => {
                 rows={4}
                 value={formData.justification}
                 onChange={handleChange}
-                className="mt-1 block w-full shadow-sm sm:text-sm focus:ring-blue-500 focus:border-blue-500 border-gray-300 rounded-md"
+                className="mt-1 block w-full shadow-sm sm:text-base focus:ring-blue-500 focus:border-blue-500 border-gray-300 rounded-md text-black"
                 placeholder="We require this information to evaluate the student's eligibility for our scholarship program..."
                 required
               />
             </div>
 
             <div className="space-y-1">
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-base font-semibold text-black">
                 Requested Information *
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-sm text-gray-800 mt-1 font-normal">
                   Select all types of information you need
                 </p>
               </label>
@@ -168,8 +180,8 @@ const StudentRequestForm = () => {
                         className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
                       />
                     </div>
-                    <div className="ml-3 text-sm">
-                      <label htmlFor={`data-${option.id}`} className="font-medium text-gray-700">
+                    <div className="ml-3 text-base">
+                      <label htmlFor={`data-${option.id}`} className="font-semibold text-black">
                         {option.name}
                       </label>
                     </div>
@@ -179,18 +191,18 @@ const StudentRequestForm = () => {
             </div>
 
             <div className="space-y-1">
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-base font-semibold text-black">
                 Consent Form (if required)
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-sm text-gray-800 mt-1 font-normal">
                   Upload a signed consent form from the student if required by your institution's policies
                 </p>
               </label>
               <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
                 <div className="space-y-1 text-center">
-                  <div className="flex text-sm text-gray-600">
+                  <div className="flex text-base text-gray-800">
                     <label
                       htmlFor="consentForm"
-                      className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none"
+                      className="relative cursor-pointer bg-white rounded-md font-semibold text-blue-600 hover:text-blue-500 focus-within:outline-none"
                     >
                       <span>Upload a file</span>
                       <input
@@ -203,11 +215,11 @@ const StudentRequestForm = () => {
                     </label>
                     <p className="pl-1">or drag and drop</p>
                   </div>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-sm text-gray-700">
                     PDF, DOCX up to 5MB
                   </p>
                   {formData.consentForm && (
-                    <p className="text-sm text-gray-500 mt-2">
+                    <p className="text-sm text-gray-700 mt-2">
                       Selected file: {formData.consentForm.name}
                     </p>
                   )}
@@ -223,7 +235,7 @@ const StudentRequestForm = () => {
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <h3 className="text-sm font-medium text-blue-800">Privacy Notice</h3>
+                  <h3 className="text-base font-semibold text-blue-800">Privacy Notice</h3>
                   <div className="mt-2 text-sm text-blue-700">
                     <p>
                       By submitting this request, you acknowledge that you have a legitimate educational interest in this student's information.
@@ -238,14 +250,14 @@ const StudentRequestForm = () => {
               <button
                 type="button"
                 onClick={() => navigate(-1)}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-base font-semibold rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting || !formData.purpose || !formData.justification || formData.requestedData.length === 0}
-                className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                className={`inline-flex items-center px-4 py-2 border border-transparent text-base font-semibold rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
                   isSubmitting || !formData.purpose || !formData.justification || formData.requestedData.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               >

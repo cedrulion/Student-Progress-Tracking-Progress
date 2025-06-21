@@ -13,7 +13,7 @@ const StudentProgress = () => {
     const [editingCourseId, setEditingCourseId] = useState(null);
     const [formData, setFormData] = useState({
         courseId: '',
-        semesterTaken: 'Fall',
+        semesterTaken: 'Semester 1',
         yearTaken: new Date().getFullYear(),
         grade: 'A',
         marks: 0,
@@ -145,7 +145,7 @@ const StudentProgress = () => {
         setEditingCourseId(null);
         setFormData({
             courseId: '',
-            semesterTaken: 'Fall',
+            semesterTaken: 'Semester 1',
             yearTaken: new Date().getFullYear(),
             grade: 'A',
             marks: 0,
@@ -315,9 +315,9 @@ const StudentProgress = () => {
                                                     value={formData.semesterTaken}
                                                     onChange={handleChange}
                                                 >
-                                                    <option value="Fall">Fall</option>
-                                                    <option value="Spring">Spring</option>
-                                                    <option value="Summer">Summer</option>
+                                                    <option value="Fall">Semester 1</option>
+                                                    <option value="Spring">Semester 2</option>
+                                                    <option value="Summer">Semester 3</option>
                                                 </select>
                                                 {formErrors.semesterTaken && <p className="mt-2 text-sm text-red-600">{formErrors.semesterTaken}</p>}
                                             </div>

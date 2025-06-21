@@ -13,7 +13,7 @@ const courseSchema = new mongoose.Schema({
   semester: {
     type: String,
     required: true,
-    enum: ['Fall', 'Spring', 'Summer'] // Added enum for semesters
+   
   },
   year: {
     type: String, // Changed to String to accommodate 'Year 1', 'Year 2'
@@ -53,10 +53,8 @@ const studentCourseSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
-  semesterTaken: { // This refers to the actual semester (e.g., Fall, Spring)
+  semesterTaken: { 
     type: String,
-   
-    enum: ['Fall', 'Spring', 'Summer']
   }
 });
 

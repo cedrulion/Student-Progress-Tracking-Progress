@@ -17,7 +17,7 @@ const CourseManagement = () => {
     });
     const [allCoursesForPrereq, setAllCoursesForPrereq] = useState([]);
 
-    const semesters = ['Fall', 'Spring', 'Summer'];
+    const semesters = ['Semester 1', 'Semester 2', 'Semester 3'];
     const years = ['Year 1', 'Year 2', 'Year 3', 'Year 4'];
 
     useEffect(() => {
