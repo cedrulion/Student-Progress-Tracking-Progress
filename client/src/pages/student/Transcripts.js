@@ -29,7 +29,7 @@ const StudentTranscript = () => {
         'http://localhost:5000/api/students/transcript/download',
         { responseType: 'blob' }
       );
-      
+
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
@@ -51,6 +51,13 @@ const StudentTranscript = () => {
     return <div className="text-center py-8">Transcript not available</div>;
   }
 
+  // Calculate total retake attempts
+  const retakeCount = transcript.courses.reduce((count, yearGroup) => {
+    return count + yearGroup.courses.reduce((yearCount, course) => {
+      return yearCount + (course.retakeAttempts?.length || 0);
+    }, 0);
+  }, 0);
+
   return (
     <div className="py-6">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -69,6 +76,16 @@ const StudentTranscript = () => {
             </button>
           </div>
         </div>
+
+        {retakeCount >= 3 && (
+          <div className="mt-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md">
+            <p className="font-bold">Important Notice:</p>
+            <p>
+              You have accumulated {retakeCount} retakes, which exceeds the maximum allowed.
+              You are no longer eligible to continue your studies at the University.
+            </p>
+          </div>
+        )}
 
         <div className="mt-8 bg-white shadow overflow-hidden rounded-lg">
           <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
@@ -108,71 +125,144 @@ const StudentTranscript = () => {
                   {transcript.gpa}
                 </p>
               </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Total Retakes</p>
+                <p className="mt-1 text-sm text-gray-900 font-bold">
+                  {retakeCount}
+                </p>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="mt-8 bg-white shadow overflow-hidden rounded-lg">
-          <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">
-              Course History
-            </h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Code
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Course Name
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Semester
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Year
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Credits
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Grade
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {transcript.courses.map((course, index) => (
-                  <tr key={index}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {course.code}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {course.name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {course.semester}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {course.yearTaken}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {course.credits}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        course.grade === 'F' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
-                      }`}>
-                        {course.grade}
-                      </span>
-                    </td>
+        {transcript.courses.map((yearGroup, yearIndex) => (
+          <div key={yearIndex} className="mt-8 bg-white shadow overflow-hidden rounded-lg">
+            <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
+              <h3 className="text-lg leading-6 font-medium text-gray-900">
+                Academic Year: {yearGroup.year}
+              </h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Code
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Course Name
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Original Grade
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Original Marks
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Retake Attempts
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Current Marks
+                    </th> {/* Updated header */}
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Credits
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {yearGroup.courses.map((course, courseIndex) => {
+                    // Get all grades (original + retakes)
+                    const allGrades = [{
+                      grade: course.originalGrade,
+                      marks: course.originalMarks,
+                      type: 'Original'
+                    }];
+
+                    course.retakeAttempts?.forEach(attempt => {
+                      allGrades.push({
+                        grade: attempt.grade,
+                        marks: attempt.marks,
+                        type: 'Retake'
+                      });
+                    });
+
+                    // Find best grade
+                    let bestGrade = { grade: 'N/A', marks: -1, type: '' }; // Initialize type
+
+                    // Define grade points for comparison
+                    const gradePoints = { 'A': 5, 'B': 4, 'C': 3, 'D': 2, 'E': 1, 'F': 0, 'N/A': -1 }; // Added N/A for safety
+
+                    allGrades.forEach(g => {
+                      if (g.grade !== 'N/A') {
+                        if (g.marks > bestGrade.marks) {
+                          bestGrade = g;
+                        } else if (g.marks === bestGrade.marks &&
+                                   gradePoints[g.grade] > gradePoints[bestGrade.grade]) {
+                          bestGrade = g;
+                        }
+                      }
+                    });
+
+                    // --- MODIFICATION START ---
+                    // If the best grade type is 'Retake', set marks to 50
+                    if (bestGrade.type === 'Retake') {
+                      bestGrade = { ...bestGrade, marks: 50 };
+                    }
+                    // --- MODIFICATION END ---
+
+                    return (
+                      <tr key={courseIndex} className={course.retakeAttempts?.length > 0 ? 'bg-red-50' : ''}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {course.code}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {course.name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            course.originalGrade === 'F' || course.originalGrade === 'E'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-green-100 text-green-800'
+                          }`}>
+                            {course.originalGrade}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {course.originalMarks}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {course.retakeAttempts?.length > 0 ? (
+                            <div className="space-y-1">
+                              {course.retakeAttempts.map((attempt, i) => (
+                                <div key={i} className="text-xs">
+                                  {attempt.grade} ({attempt.marks})
+                                </div>
+                              ))}
+                            </div>
+                          ) : 'None'}
+                        </td>
+                        {/* MODIFICATION START - Displaying marks for Best Grade */}
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            bestGrade.grade === 'F' || bestGrade.grade === 'E'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-green-100 text-green-800'
+                          }`}>
+                            {bestGrade.grade} ({bestGrade.marks}) - {bestGrade.type}
+                          </span>
+                        </td>
+                        {/* MODIFICATION END */}
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {course.credits}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        ))}
       </div>
     </div>
   );

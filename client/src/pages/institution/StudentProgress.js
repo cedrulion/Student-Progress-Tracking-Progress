@@ -90,12 +90,61 @@ const InstitutionStudentProgress = () => {
     );
   }
 
-  const coursesByYear = student.courses.reduce((acc, course) => {
-    const year = course.course?.year || 'N/A';
+  // Calculate total retake attempts across all courses
+  const retakeCount = student.courses.reduce((count, course) => count + course.retakeAttempts.length, 0);
+  const canContinueStudy = retakeCount < 3;
+
+  // Function to get the best grade for a course (original or retake)
+  const getBestGrade = (studentCourse) => {
+    const gradePoints = { 'A': 5, 'B': 4, 'C': 3, 'D': 2, 'E': 1, 'F': 0, 'N/A': 0 };
+
+    const allGrades = [{
+      grade: studentCourse.originalGrade,
+      marks: studentCourse.originalMarks,
+      type: 'Original',
+      yearTaken: studentCourse.originalYearTaken,
+      semesterTaken: studentCourse.originalSemesterTaken
+    }];
+
+    studentCourse.retakeAttempts.forEach(att => {
+      allGrades.push({
+        grade: att.grade,
+        marks: att.marks,
+        type: 'Retake',
+        yearTaken: att.yearTaken,
+        semesterTaken: att.semesterTaken
+      });
+    });
+
+    let bestGrade = { grade: 'N/A', marks: -1, type: 'N/A' }; // Initialize type
+
+    allGrades.forEach(g => {
+      if (g.grade !== 'N/A') {
+        if (g.marks > bestGrade.marks) {
+          bestGrade = g;
+        } else if (g.marks === bestGrade.marks &&
+                   gradePoints[g.grade] > gradePoints[bestGrade.grade]) {
+          bestGrade = g;
+        }
+      }
+    });
+
+    // --- MODIFICATION START ---
+    if (bestGrade.type === 'Retake') {
+      return { ...bestGrade, marks: 50 }; // Override marks to 50 for retakes
+    }
+    // --- MODIFICATION END ---
+
+    return bestGrade;
+  };
+
+  // Group courses by year for display
+  const coursesByYear = student.courses.reduce((acc, studentCourse) => {
+    const year = studentCourse.course?.year || 'N/A';
     if (!acc[year]) {
       acc[year] = [];
     }
-    acc[year].push(course);
+    acc[year].push(studentCourse);
     return acc;
   }, {});
 
@@ -104,9 +153,6 @@ const InstitutionStudentProgress = () => {
     if (b === 'N/A') return -1;
     return parseInt(a) - parseInt(b);
   });
-
-  const retakeCount = student.courses.filter(course => course.isRetake).length;
-  const canContinueStudy = retakeCount < 3;
 
   return (
     <div className="min-h-screen bg-white py-8">
@@ -151,6 +197,10 @@ const InstitutionStudentProgress = () => {
               <dt className="text-sm font-medium text-gray-500">Cumulative GPA</dt>
               <dd className="mt-1 text-base font-bold text-blue-700"><strong>{student.gpa ? student.gpa.toFixed(2) : 'N/A'}</strong></dd>
             </div>
+            <div className="sm:col-span-1">
+              <dt className="text-sm font-medium text-gray-500">Total Retake Attempts</dt>
+              <dd className="mt-1 text-base font-bold text-gray-900"><strong>{retakeCount}</strong></dd>
+            </div>
           </dl>
         </div>
 
@@ -161,14 +211,6 @@ const InstitutionStudentProgress = () => {
           {student.courses && student.courses.length > 0 ? (
             sortedYears.map(year => (
               <div key={year} className="mb-8 p-6 bg-white shadow rounded-lg border border-gray-200">
-                <div className="flex-1 min-w-0">
-                  <h1 className=" font-extrabold leading-tight text-gray-900 tracking-tight">
-                    <span >{student.firstName} {student.lastName}</span>
-                  </h1>
-                  <p className="mt-2 text-md text-gray-600">
-                    Student ID: <span className="font-semibold text-gray-800">{student.studentId}</span> | Program: <span className="font-semibold text-gray-800">{student.program}</span>
-                  </p>
-                </div>
                 <h3 className="text-xl font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">
                   {year}
                 </h3>
@@ -183,60 +225,67 @@ const InstitutionStudentProgress = () => {
                           Course Name
                         </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider border border-gray-300">
-                          Grade
+                          Original Grade
                         </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider border border-gray-300">
-                          Marks
+                          Original Marks
                         </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider border border-gray-300">
+                          Retake Attempts
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider border border-gray-300">
+                          Current Marks
+                        </th> {/* Updated column header */}
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider border border-gray-300">
                           Credits
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider border border-gray-300">
-                          Semester Taken
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider border border-gray-300">
-                          Year Taken
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider border border-gray-300">
-                          Retake
                         </th>
                       </tr>
                     </thead>
                     <tbody className="bg-white">
-                      {coursesByYear[year].sort((a, b) => {
-                        const semesterOrder = { 'Fall': 1, 'Spring': 2, 'Summer': 3, 'Winter': 4 };
-                        if (a.yearTaken !== b.yearTaken) {
-                          return a.yearTaken - b.yearTaken;
-                        }
-                        return (semesterOrder[a.semesterTaken] || 0) - (semesterOrder[b.semesterTaken] || 0);
-                      }).map((studentCourse, index) => (
-                        <tr key={index} className={studentCourse.isRetake ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50'}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-800 border border-gray-300">
-                            <strong>{studentCourse.course ? studentCourse.course.code : 'N/A'}</strong>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 border border-gray-300">
-                            {studentCourse.course ? studentCourse.course.name : 'N/A'}
-                          </td>
-                          <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${studentCourse.grade === 'F' ? 'text-red-600' : 'text-green-700'} border border-gray-300`}>
-                            <strong>{studentCourse.grade}</strong>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold">
-                            <strong>{studentCourse.marks}</strong>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 border border-gray-300">
-                            {studentCourse.course ? studentCourse.course.credits : 'N/A'}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 border border-gray-300">
-                            {studentCourse.semesterTaken}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 border border-gray-300">
-                            {studentCourse.yearTaken}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm border border-gray-300">
-                            {studentCourse.isRetake ? <strong className="text-red-500">Yes</strong> : 'No'}
-                          </td>
-                        </tr>
-                      ))}
+                      {coursesByYear[year].map((studentCourse, index) => {
+                        const bestGrade = getBestGrade(studentCourse);
+                        const hasRetakes = studentCourse.retakeAttempts.length > 0;
+
+                        return (
+                          <tr key={index} className={hasRetakes ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50'}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-800 border border-gray-300">
+                              <strong>{studentCourse.course ? studentCourse.course.code : 'N/A'}</strong>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 border border-gray-300">
+                              {studentCourse.course ? studentCourse.course.name : 'N/A'}
+                            </td>
+                            <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${
+                              studentCourse.originalGrade === 'F' || studentCourse.originalGrade === 'E' ? 'text-red-600' : 'text-green-700'
+                            } border border-gray-300`}>
+                              {studentCourse.originalGrade}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 border border-gray-300">
+                              {studentCourse.originalMarks}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 border border-gray-300">
+                              {studentCourse.retakeAttempts.length > 0 ? (
+                                <div className="space-y-1">
+                                  {studentCourse.retakeAttempts.map((attempt, i) => (
+                                    <div key={i} className="text-xs">
+                                      {attempt.grade} ({attempt.marks}) - {attempt.semesterTaken} {attempt.yearTaken}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : 'None'}
+                            </td>
+                            {/* MODIFICATION START - Displaying marks for Best Grade */}
+                            <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${
+                              bestGrade.grade === 'F' || bestGrade.grade === 'E' ? 'text-red-600' : 'text-green-700'
+                            } border border-gray-300`}>
+                              {bestGrade.grade} ({bestGrade.marks}) - {bestGrade.type}
+                            </td>
+                            {/* MODIFICATION END */}
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 border border-gray-300">
+                              {studentCourse.course ? studentCourse.course.credits : 'N/A'}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -254,11 +303,11 @@ const InstitutionStudentProgress = () => {
           </div>
         </div>
 
-        {retakeCount >= 3 && (
+        {!canContinueStudy && (
           <div className="mb-8 p-6 bg-red-100 border-l-4 border-red-500 text-red-700 rounded-lg shadow-md" role="alert">
             <p className="font-bold text-lg">Important Notice:</p>
             <p className="mt-2 text-base">
-              This student has accumulated **{retakeCount} retakes**, which exceeds the maximum allowed retakes at the University of Rwanda. Consequently, this student is **no longer eligible to continue their studies** at the University.
+              This student has accumulated <strong>{retakeCount} retakes</strong>, which exceeds the maximum allowed retakes at the University of Rwanda. Consequently, this student is <strong>no longer eligible to continue their studies</strong> at the University.
             </p>
           </div>
         )}

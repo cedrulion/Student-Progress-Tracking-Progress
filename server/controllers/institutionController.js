@@ -1,5 +1,3 @@
-// institutionController.js
-
 const Institution = require('../models/Institution');
 const { Student, Course } = require('../models/Student');
 const pdf = require('html-pdf');
@@ -10,12 +8,14 @@ const fs = require('fs');
 const getUserId = (user) => {
   return user._id || user.id;
 };
+
 const SEMESTER_ORDER = {
   'Semester 1': 1,
   'Semester 2': 2,
   'Summer': 3,
-  'Year-long': 4 
+  'Year-long': 4
 };
+
 const GRADE_POINTS_5_SCALE = {
   'A': 5,
   'B': 4,
@@ -23,21 +23,74 @@ const GRADE_POINTS_5_SCALE = {
   'D': 2,
   'E': 1,
   'F': 0,
-  'N/A': 0 
+  'N/A': 0
 };
 
+// Helper function to calculate GPA based on best attempts
+const calculateGPA = (student) => {
+  let totalPoints = 0;
+  let totalCredits = 0;
+
+  student.courses.forEach(studentCourse => {
+    if (studentCourse.course) {
+      // Get all grades (original + retakes)
+      const allGrades = [{
+        grade: studentCourse.originalGrade,
+        marks: studentCourse.originalMarks
+      }];
+
+      studentCourse.retakeAttempts.forEach(attempt => {
+        allGrades.push({
+          grade: attempt.grade,
+          marks: attempt.marks
+        });
+      });
+
+      // Find the best grade (highest marks, or best letter grade if marks are tied)
+      let bestGrade = {
+        grade: 'N/A',
+        marks: -1
+      };
+
+      allGrades.forEach(g => {
+        if (g.grade !== 'N/A') {
+          if (g.marks > bestGrade.marks) {
+            bestGrade = g;
+          } else if (g.marks === bestGrade.marks &&
+            GRADE_POINTS_5_SCALE[g.grade] > GRADE_POINTS_5_SCALE[bestGrade.grade]) {
+            bestGrade = g;
+          }
+        }
+      });
+
+      if (bestGrade.grade !== 'N/A') {
+        totalPoints += GRADE_POINTS_5_SCALE[bestGrade.grade] * studentCourse.course.credits;
+        totalCredits += studentCourse.course.credits;
+      }
+    }
+  });
+
+  return totalCredits > 0 ? parseFloat((totalPoints / totalCredits).toFixed(2)) : 0;
+};
 
 // Get institution profile
 exports.getProfile = async (req, res, next) => {
-  console.log('User making request:', req.user);
   try {
     const userId = getUserId(req.user);
-    const institution = await Institution.findOne({ userId: userId }).populate('userId');
+    const institution = await Institution.findOne({
+      userId: userId
+    }).populate('userId');
     if (!institution) {
-      return res.status(404).json({ success: false, message: 'Institution not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Institution not found'
+      });
     }
 
-    res.status(200).json({ success: true, data: institution });
+    res.status(200).json({
+      success: true,
+      data: institution
+    });
   } catch (err) {
     next(err);
   }
@@ -47,17 +100,26 @@ exports.getProfile = async (req, res, next) => {
 exports.updateProfile = async (req, res, next) => {
   try {
     const userId = getUserId(req.user);
-    const institution = await Institution.findOneAndUpdate(
-      { userId: userId },
-      req.body,
-      { new: true, runValidators: true }
+    const institution = await Institution.findOneAndUpdate({
+      userId: userId
+    },
+      req.body, {
+      new: true,
+      runValidators: true
+    }
     ).populate('userId');
 
     if (!institution) {
-      return res.status(404).json({ success: false, message: 'Institution not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Institution not found'
+      });
     }
 
-    res.status(200).json({ success: true, data: institution });
+    res.status(200).json({
+      success: true,
+      data: institution
+    });
   } catch (err) {
     next(err);
   }
@@ -66,17 +128,21 @@ exports.updateProfile = async (req, res, next) => {
 // Request student progress
 exports.requestStudentProgress = async (req, res, next) => {
   try {
-    const { studentId } = req.params;
-
-    // Get user ID consistently
+    const {
+      studentId
+    } = req.params;
     const userId = getUserId(req.user);
 
-    const institution = await Institution.findOne({ userId: userId });
+    const institution = await Institution.findOne({
+      userId: userId
+    });
     if (!institution) {
-      return res.status(404).json({ success: false, message: 'Institution not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Institution not found'
+      });
     }
 
-    // Check if institution is verified
     if (institution.verificationStatus !== 'verified') {
       return res.status(403).json({
         success: false,
@@ -84,13 +150,14 @@ exports.requestStudentProgress = async (req, res, next) => {
       });
     }
 
-    // Check if student exists
     const student = await Student.findById(studentId);
     if (!student) {
-      return res.status(404).json({ success: false, message: 'Student not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found'
+      });
     }
 
-    // Check if request already exists
     const existingRequest = institution.requestedStudents.find(
       req => req.student.toString() === studentId
     );
@@ -102,17 +169,15 @@ exports.requestStudentProgress = async (req, res, next) => {
       });
     }
 
-    // Create new request with data from FormData
     const newRequest = {
       student: studentId,
       purpose: req.body.purpose,
       justification: req.body.justification,
-      requestedData: Array.isArray(req.body.requestedData)
-        ? req.body.requestedData
-        : [req.body.requestedData].filter(Boolean)
+      requestedData: Array.isArray(req.body.requestedData) ?
+        req.body.requestedData :
+        [req.body.requestedData].filter(Boolean)
     };
 
-    // Handle file upload if exists
     if (req.file) {
       newRequest.consentForm = req.file.path;
     }
@@ -120,7 +185,10 @@ exports.requestStudentProgress = async (req, res, next) => {
     institution.requestedStudents.push(newRequest);
     await institution.save();
 
-    res.status(201).json({ success: true, data: institution });
+    res.status(201).json({
+      success: true,
+      data: institution
+    });
   } catch (err) {
     next(err);
   }
@@ -129,15 +197,21 @@ exports.requestStudentProgress = async (req, res, next) => {
 // Get student progress (if approved)
 exports.getStudentProgress = async (req, res, next) => {
   try {
-    const { studentId } = req.params;
-
+    const {
+      studentId
+    } = req.params;
     const userId = getUserId(req.user);
-    const institution = await Institution.findOne({ userId: userId });
+
+    const institution = await Institution.findOne({
+      userId: userId
+    });
     if (!institution) {
-      return res.status(404).json({ success: false, message: 'Institution not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Institution not found'
+      });
     }
 
-    // Find approved request for this student
     const approvedRequest = institution.requestedStudents.find(
       req => req.student.toString() === studentId && req.status === 'approved'
     );
@@ -149,17 +223,24 @@ exports.getStudentProgress = async (req, res, next) => {
       });
     }
 
-    // --- IMPORTANT FIX HERE ---
-    // Populate the 'course' field within the 'courses' array to get course details
     const student = await Student.findById(studentId)
       .select('-transcriptRequests')
-      .populate('courses.course'); // <--- ADDED THIS LINE
+      .populate('courses.course');
 
     if (!student) {
-      return res.status(404).json({ success: false, message: 'Student not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found'
+      });
     }
 
-    res.status(200).json({ success: true, data: student });
+    // Calculate GPA based on best attempts
+    student.gpa = calculateGPA(student);
+
+    res.status(200).json({
+      success: true,
+      data: student
+    });
   } catch (err) {
     next(err);
   }
@@ -169,7 +250,10 @@ exports.getStudentProgress = async (req, res, next) => {
 exports.getAllStudents = async (req, res, next) => {
   try {
     const students = await Student.find().select('firstName lastName studentId department program');
-    res.status(200).json({ success: true, data: students });
+    res.status(200).json({
+      success: true,
+      data: students
+    });
   } catch (err) {
     next(err);
   }
@@ -179,14 +263,22 @@ exports.getAllStudents = async (req, res, next) => {
 exports.getRequests = async (req, res, next) => {
   try {
     const userId = getUserId(req.user);
-    const institution = await Institution.findOne({ userId: userId })
+    const institution = await Institution.findOne({
+      userId: userId
+    })
       .populate('requestedStudents.student', 'firstName lastName studentId department program');
-    
+
     if (!institution) {
-      return res.status(404).json({ success: false, message: 'Institution not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Institution not found'
+      });
     }
 
-    res.status(200).json({ success: true, data: institution.requestedStudents });
+    res.status(200).json({
+      success: true,
+      data: institution.requestedStudents
+    });
   } catch (err) {
     next(err);
   }
@@ -194,14 +286,24 @@ exports.getRequests = async (req, res, next) => {
 
 exports.requestStudentTranscript = async (req, res, next) => {
   try {
-    const { studentId } = req.params;
-    const { purpose, justification } = req.body;
+    const {
+      studentId
+    } = req.params;
+    const {
+      purpose,
+      justification
+    } = req.body;
 
     const userId = getUserId(req.user);
-    const institution = await Institution.findOne({ userId: userId });
+    const institution = await Institution.findOne({
+      userId: userId
+    });
 
     if (!institution) {
-      return res.status(404).json({ success: false, message: 'Institution not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Institution not found'
+      });
     }
 
     if (institution.verificationStatus !== 'verified') {
@@ -213,10 +315,12 @@ exports.requestStudentTranscript = async (req, res, next) => {
 
     const student = await Student.findById(studentId);
     if (!student) {
-      return res.status(404).json({ success: false, message: 'Student not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found'
+      });
     }
 
-    // Check if transcript request already exists and is pending or approved
     const existingTranscriptRequest = institution.transcriptRequests.find(
       req => req.student.toString() === studentId && (req.status === 'pending' || req.status === 'approved')
     );
@@ -234,7 +338,7 @@ exports.requestStudentTranscript = async (req, res, next) => {
       justification,
     };
 
-    if (req.file) { // Assuming a consent form might be uploaded for transcripts too
+    if (req.file) {
       newTranscriptRequest.consentForm = req.file.path;
     }
 
@@ -252,24 +356,30 @@ exports.requestStudentTranscript = async (req, res, next) => {
   }
 };
 
-// NEW: Get Institution's Transcript Requests
 exports.getInstitutionTranscriptRequests = async (req, res, next) => {
   try {
     const userId = getUserId(req.user);
-    const institution = await Institution.findOne({ userId: userId })
+    const institution = await Institution.findOne({
+      userId: userId
+    })
       .populate('transcriptRequests.student', 'firstName lastName studentId program department');
 
     if (!institution) {
-      return res.status(404).json({ success: false, message: 'Institution not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Institution not found'
+      });
     }
 
-    res.status(200).json({ success: true, data: institution.transcriptRequests });
+    res.status(200).json({
+      success: true,
+      data: institution.transcriptRequests
+    });
   } catch (err) {
     next(err);
   }
 };
 
-// NEW: Download Approved Student Transcript
 exports.downloadApprovedStudentTranscript = async (req, res, next) => {
   try {
     const {
@@ -277,8 +387,6 @@ exports.downloadApprovedStudentTranscript = async (req, res, next) => {
     } = req.params;
     const userId = getUserId(req.user);
 
-    // Find the institution and populate its transcript requests to check status
-    // Populate 'transcriptRequests.student' to get student details for the PDF
     const institution = await Institution.findOne({
       userId: userId
     })
@@ -291,34 +399,29 @@ exports.downloadApprovedStudentTranscript = async (req, res, next) => {
       });
     }
 
-    // Crucial: Check for an approved transcript request for this student by this institution
     const approvedRequest = institution.transcriptRequests.find(
       reqItem => reqItem.student && reqItem.student._id.toString() === studentId && reqItem.status === 'approved'
     );
 
     if (!approvedRequest) {
-      // If no approved request is found, deny access
       return res.status(403).json({
         success: false,
         message: 'You do not have an approved transcript request for this student or the request is not yet approved.'
       });
     }
 
-    // Get the student object directly from the populated approved request
-    // Ensure to populate courses.course here as well for the PDF generation
-    const student = await Student.findById(studentId).populate('courses.course'); // <--- Ensure this is populated here too for PDF
-
+    const student = await Student.findById(studentId).populate('courses.course');
     if (!student) {
-      // This is a fallback, should ideally not happen if populate worked correctly
       return res.status(404).json({
         success: false,
         message: 'Student data not available in the approved request.'
       });
     }
 
-    // --- Start PDF Generation Logic (adapted from your admin's generateTranscript) ---
+    // Calculate GPA based on best attempts
+    student.gpa = calculateGPA(student);
 
-    // Group courses by sc.course.year
+    // Group courses by year
     const coursesByYear = student.courses.reduce((acc, studentCourse) => {
       const year = studentCourse.course && studentCourse.course.year ? studentCourse.course.year.toString() : 'N/A';
       if (!acc[year]) {
@@ -329,35 +432,13 @@ exports.downloadApprovedStudentTranscript = async (req, res, next) => {
     }, {});
 
     const sortedYears = Object.keys(coursesByYear).sort((a, b) => {
-      if (a === 'N/A') return 1; // N/A years go to the end
+      if (a === 'N/A') return 1;
       if (b === 'N/A') return -1;
       return parseInt(a) - parseInt(b);
     });
 
-    // Sort courses within each year by semester taken
-    sortedYears.forEach(year => {
-      coursesByYear[year].sort((a, b) => {
-        const semesterA = a.semesterTaken || 'N/A';
-        const semesterB = b.semesterTaken || 'N/A';
-        return (SEMESTER_ORDER[semesterA] || 99) - (SEMESTER_ORDER[semesterB] || 99); // Handle undefined semesters
-      });
-    });
-
-    // Calculate GPA (using your provided GPA scale: A=5, B=4, etc.)
-    let totalPoints = 0;
-    let totalCredits = 0;
-
-    student.courses.forEach(studentCourse => {
-      // Ensure courseDetails are available from population and grade exists in map
-      if (studentCourse.course && GRADE_POINTS_5_SCALE[studentCourse.grade] !== undefined) {
-        totalPoints += GRADE_POINTS_5_SCALE[studentCourse.grade] * studentCourse.course.credits;
-        totalCredits += studentCourse.course.credits;
-      }
-    });
-
-    const gpa = totalCredits > 0 ? (totalPoints / totalCredits).toFixed(2) : '0.00';
-
-    const retakeCount = student.courses.filter(course => course.isRetake).length;
+    // Calculate total retake attempts
+    const retakeCount = student.courses.reduce((count, course) => count + course.retakeAttempts.length, 0);
 
     let retakeWarning = '';
     if (retakeCount >= 3) {
@@ -398,8 +479,7 @@ exports.downloadApprovedStudentTranscript = async (req, res, next) => {
           .course-table th { background-color: #e0f2f7; color: #2c3e50; font-weight: bold; }
           .grade-F { color: #e74c3c; font-weight: bold; }
           .grade-pass { color: #27ae60; font-weight: bold; }
-          .retake-row { background-color: #ffebee; } /* Light red for retake rows */
-          .retake-status { color: #c0392b; font-weight: bold; } /* Darker red for 'Yes' */
+          .retake-row { background-color: #ffebee; }
           .gpa-section { text-align: right; margin-top: 25px; padding: 15px; background-color: #ecf0f1; border-radius: 5px; border: 1px solid #c7d0d6; }
           .gpa-section p { font-size: 14pt; font-weight: bold; color: #2980b9; margin: 0; }
           .footer { text-align: center; margin-top: 40px; font-style: italic; color: #7f8c8d; font-size: 10pt; }
@@ -420,7 +500,7 @@ exports.downloadApprovedStudentTranscript = async (req, res, next) => {
         <div class="header">
           <h1>OFFICIAL ACADEMIC TRANSCRIPT</h1>
           <h2>University of Rwanda</h2>
-          <h1>Requested by ${institution.name}</h1>
+          <h3>Requested by ${institution.name}</h3>
         </div>
 
         <div class="student-info">
@@ -440,8 +520,8 @@ exports.downloadApprovedStudentTranscript = async (req, res, next) => {
             <tr>
               <td><strong>Date Issued:</strong></td>
               <td>${new Date().toLocaleDateString('en-GB')}</td>
-              <td></td>
-              <td></td>
+              <td><strong>Total Retakes:</strong></td>
+              <td>${retakeCount}</td>
             </tr>
           </table>
         </div>
@@ -457,27 +537,83 @@ exports.downloadApprovedStudentTranscript = async (req, res, next) => {
                   <tr>
                     <th>Course Code</th>
                     <th>Course Name</th>
-                    <th>Grade</th>
-                    <th>Retake</th>
-                    <th>Marks</th>
-                    <th>Semester</th>
-                    <th>Year</th>
+                    <th>Original Grade</th>
+                    <th>Original Marks</th>
+                    <th>Retake Attempts</th>
+                    <th>Current Marks</th>
                     <th>Credits</th>
                   </tr>
                 </thead>
                 <tbody>
-                  ${coursesByYear[year].map(sc => `
-                    <tr class="${sc.isRetake ? 'retake-row' : ''}">
-                      <td>${sc.course ? sc.course.code : 'N/A'}</td>
-                      <td>${sc.course ? sc.course.name : 'N/A'}</td>
-                      <td class="${sc.grade === 'F' || sc.grade === 'E' ? 'grade-F' : 'grade-pass'}">${sc.grade}</td>
-                      <td class="${sc.isRetake ? 'retake-status' : ''}">${sc.isRetake ? 'Yes' : 'No'}</td>
-                      <td>${sc.marks !== undefined ? sc.marks : 'N/A'}</td>
-                      <td>${sc.semesterTaken || 'N/A'}</td>
-                      <td>${sc.course ? sc.course.year : 'N/A'}</td>
-                      <td>${sc.course ? sc.course.credits : 'N/A'}</td>
-                    </tr>
-                  `).join('')}
+                  ${coursesByYear[year].map(studentCourse => {
+                    // Get all grades (original + retakes)
+                    const allGrades = [{
+                      grade: studentCourse.originalGrade,
+                      marks: studentCourse.originalMarks,
+                      type: 'Original',
+                      yearTaken: studentCourse.originalYearTaken,
+                      semesterTaken: studentCourse.originalSemesterTaken
+                    }];
+
+                    studentCourse.retakeAttempts.forEach(att => {
+                      allGrades.push({
+                        grade: att.grade,
+                        marks: att.marks,
+                        type: 'Retake',
+                        yearTaken: att.yearTaken,
+                        semesterTaken: att.semesterTaken
+                      });
+                    });
+
+                    // Find best grade for display (applying 50 cap for retakes)
+                    let bestGradeForDisplay = {
+                      grade: 'N/A',
+                      marks: -1,
+                      type: ''
+                    };
+
+                    allGrades.forEach(g => {
+                      if (g.grade !== 'N/A') {
+                        if (g.marks > bestGradeForDisplay.marks) {
+                          bestGradeForDisplay = { ...g
+                          }; // Copy object to avoid modifying original
+                        } else if (g.marks === bestGradeForDisplay.marks &&
+                          GRADE_POINTS_5_SCALE[g.grade] > GRADE_POINTS_5_SCALE[bestGradeForDisplay.grade]) {
+                          bestGradeForDisplay = { ...g
+                          };
+                        }
+                      }
+                    });
+
+                    // Apply the "50 for retake" logic for display purposes
+                    let displayedMarks = bestGradeForDisplay.marks;
+                    if (bestGradeForDisplay.type === 'Retake' && bestGradeForDisplay.marks > 50) {
+                      displayedMarks = 50;
+                    }
+
+                    const hasRetakes = studentCourse.retakeAttempts.length > 0;
+
+                    return `
+                      <tr class="${hasRetakes ? 'retake-row' : ''}">
+                        <td>${studentCourse.course ? studentCourse.course.code : 'N/A'}</td>
+                        <td>${studentCourse.course ? studentCourse.course.name : 'N/A'}</td>
+                        <td class="${studentCourse.originalGrade === 'F' || studentCourse.originalGrade === 'E' ? 'grade-F' : 'grade-pass'}">
+                          ${studentCourse.originalGrade}
+                        </td>
+                        <td>${studentCourse.originalMarks}</td>
+                        <td>
+                          ${studentCourse.retakeAttempts.length > 0 ?
+                            studentCourse.retakeAttempts.map((attempt, i) =>
+                              `<div>${attempt.grade} (${attempt.marks}) - ${attempt.semesterTaken} ${attempt.yearTaken}</div>`
+                            ).join('') : 'None'}
+                        </td>
+                        <td class="${bestGradeForDisplay.grade === 'F' || bestGradeForDisplay.grade === 'E' ? 'grade-F' : 'grade-pass'}">
+                          ${bestGradeForDisplay.grade} (${displayedMarks})
+                        </td>
+                        <td>${studentCourse.course ? studentCourse.course.credits : 'N/A'}</td>
+                      </tr>
+                    `;
+                  }).join('')}
                 </tbody>
               </table>
             </div>
@@ -485,7 +621,7 @@ exports.downloadApprovedStudentTranscript = async (req, res, next) => {
         `).join('')}
 
         <div class="gpa-section">
-          <p>Cumulative GPA: ${gpa}</p>
+          <p>Cumulative GPA: ${student.gpa.toFixed(2)}</p>
         </div>
 
         <div class="footer">
@@ -496,7 +632,6 @@ exports.downloadApprovedStudentTranscript = async (req, res, next) => {
       </html>
     `;
 
-    // PDF options
     const options = {
       format: 'Letter',
       border: {
@@ -507,7 +642,6 @@ exports.downloadApprovedStudentTranscript = async (req, res, next) => {
       },
     };
 
-    // Generate PDF
     pdf.create(html, options).toBuffer((err, buffer) => {
       if (err) {
         console.error('PDF generation error:', err);
@@ -523,18 +657,18 @@ exports.downloadApprovedStudentTranscript = async (req, res, next) => {
         'Content-Length': buffer.length
       });
 
-      res.send(buffer); // Send the PDF buffer
+      res.send(buffer);
     });
 
   } catch (err) {
     console.error('Error in downloadApprovedStudentTranscript:', err);
-    // Ensure all unhandled errors also send a JSON response
     res.status(500).json({
       success: false,
       message: 'Internal server error during transcript download.'
     });
   }
 };
+
 exports.getRemainingCourses = async (req, res, next) => {
   try {
     const {
@@ -550,19 +684,48 @@ exports.getRemainingCourses = async (req, res, next) => {
     }
 
     const allCourses = await Course.find();
+
+    // Get IDs of courses the student has passed (original or retake)
     const studentCompletedCourseIds = student.courses
-      .filter(sc => ['A', 'B', 'C', 'D'].includes(sc.grade))
+      .filter(sc => {
+        const allGrades = [{
+          grade: sc.originalGrade
+        }];
+        sc.retakeAttempts.forEach(att => allGrades.push({
+          grade: att.grade
+        }));
+        return allGrades.some(g => ['A', 'B', 'C', 'D'].includes(g.grade));
+      })
       .map(sc => sc.course._id.toString());
 
     const remainingCourses = allCourses.filter(course => {
-      const isAlreadyTaken = student.courses.some(sc => sc.course._id.toString() === course._id.toString());
-      if (isAlreadyTaken) {
-        return false;
+      // Check if student has already taken this course (regardless of passing)
+      const hasTakenCourse = student.courses.some(sc =>
+        sc.course._id.toString() === course._id.toString()
+      );
+
+      // If taken but not passed, it's still remaining (can retake)
+      if (hasTakenCourse) {
+        const studentCourse = student.courses.find(sc =>
+          sc.course._id.toString() === course._id.toString()
+        );
+
+        // Check if any attempt (original or retake) was passing
+        const allGrades = [{
+          grade: studentCourse.originalGrade
+        }];
+        studentCourse.retakeAttempts.forEach(att => allGrades.push({
+          grade: att.grade
+        }));
+
+        return !allGrades.some(g => ['A', 'B', 'C', 'D'].includes(g.grade));
       }
 
+      // If not taken at all, check prerequisites
       const hasMetPrerequisites = course.prerequisites.every(prereqId =>
         studentCompletedCourseIds.includes(prereqId.toString())
       );
+
       return hasMetPrerequisites;
     });
 
