@@ -11,6 +11,10 @@ const InstitutionStudentProgress = () => {
   const [loading, setLoading] = useState(true);
   const { token, user } = useContext(AuthContext);
 
+  // Retake policy constants
+  const MAX_RETAKES_PER_COURSE = 2; // Original + 2 retakes = 3 total attempts
+  const MAX_COURSES_WITH_RETAKES = 3; // Max different courses that can have retakes
+
   useEffect(() => {
     const fetchAllStudentData = async () => {
       setLoading(true);
@@ -90,9 +94,16 @@ const InstitutionStudentProgress = () => {
     );
   }
 
-  // Calculate total retake attempts across all courses
+  // Calculate retake statistics
   const retakeCount = student.courses.reduce((count, course) => count + course.retakeAttempts.length, 0);
-  const canContinueStudy = retakeCount < 3;
+  const coursesWithRetakes = student.courses.filter(course => course.retakeAttempts.length > 0).length;
+
+  // Check retake policy violations
+  const exceededCourseRetakes = student.courses.some(
+    course => course.retakeAttempts.length > MAX_RETAKES_PER_COURSE
+  );
+  const exceededTotalCoursesWithRetakes = coursesWithRetakes >= MAX_COURSES_WITH_RETAKES;
+  const canContinueStudy = !exceededCourseRetakes && !exceededTotalCoursesWithRetakes;
 
   // Function to get the best grade for a course (original or retake)
   const getBestGrade = (studentCourse) => {
@@ -116,7 +127,7 @@ const InstitutionStudentProgress = () => {
       });
     });
 
-    let bestGrade = { grade: 'N/A', marks: -1, type: 'N/A' }; // Initialize type
+    let bestGrade = { grade: 'N/A', marks: -1, type: 'N/A' };
 
     allGrades.forEach(g => {
       if (g.grade !== 'N/A') {
@@ -129,11 +140,10 @@ const InstitutionStudentProgress = () => {
       }
     });
 
-    // --- MODIFICATION START ---
-    if (bestGrade.type === 'Retake') {
-      return { ...bestGrade, marks: 50 }; // Override marks to 50 for retakes
+    // Apply the "50 for retake" logic for display purposes
+    if (bestGrade.type === 'Retake' && bestGrade.marks > 50) {
+      return { ...bestGrade, marks: 50 };
     }
-    // --- MODIFICATION END ---
 
     return bestGrade;
   };
@@ -201,8 +211,44 @@ const InstitutionStudentProgress = () => {
               <dt className="text-sm font-medium text-gray-500">Total Retake Attempts</dt>
               <dd className="mt-1 text-base font-bold text-gray-900"><strong>{retakeCount}</strong></dd>
             </div>
+            <div className="sm:col-span-1">
+              <dt className="text-sm font-medium text-gray-500">Courses With Retakes</dt>
+              <dd className="mt-1 text-base font-bold text-gray-900"><strong>{coursesWithRetakes}</strong></dd>
+            </div>
           </dl>
         </div>
+
+        {!canContinueStudy && (
+          <div className="mb-8 p-6 bg-red-100 border-l-4 border-red-500 text-red-700 rounded-lg shadow-md" role="alert">
+            <p className="font-bold text-lg">Important Notice:</p>
+            <p className="mt-2 text-base">
+              This student has violated the University of Rwanda retake policies:
+            </p>
+            <ul className="list-disc pl-5 mt-2 space-y-1">
+              {exceededCourseRetakes && (
+                <li>Exceeded maximum of {MAX_RETAKES_PER_COURSE} retakes in one or more courses (original + {MAX_RETAKES_PER_COURSE} retakes allowed)</li>
+              )}
+              {exceededTotalCoursesWithRetakes && (
+                <li>Exceeded maximum of {MAX_COURSES_WITH_RETAKES} different courses with retake attempts</li>
+              )}
+            </ul>
+            <p className="mt-3 font-semibold">
+              This student is <strong>no longer eligible to continue their studies</strong> at the University.
+            </p>
+          </div>
+        )}
+
+        {retakeCount > 0 && canContinueStudy && (
+          <div className="mb-8 p-6 bg-blue-100 border-l-4 border-blue-500 text-blue-700 rounded-lg shadow-md">
+            <p className="font-bold text-lg">Retake Information:</p>
+            <p className="mt-2 text-base">
+              This student has {retakeCount} total retake attempts across {coursesWithRetakes} different courses.
+            </p>
+            <p className="mt-2 text-base">
+              University policy allows maximum {MAX_RETAKES_PER_COURSE} retakes per course (original + {MAX_RETAKES_PER_COURSE} retakes) and retakes in maximum {MAX_COURSES_WITH_RETAKES} different courses.
+            </p>
+          </div>
+        )}
 
         <div className="mb-8">
           <h2 className="text-2xl font-bold leading-tight text-gray-900 mb-6">
@@ -234,8 +280,8 @@ const InstitutionStudentProgress = () => {
                           Retake Attempts
                         </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider border border-gray-300">
-                          Current Marks
-                        </th> {/* Updated column header */}
+                          Best Grade (Marks)
+                        </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider border border-gray-300">
                           Credits
                         </th>
@@ -245,9 +291,14 @@ const InstitutionStudentProgress = () => {
                       {coursesByYear[year].map((studentCourse, index) => {
                         const bestGrade = getBestGrade(studentCourse);
                         const hasRetakes = studentCourse.retakeAttempts.length > 0;
+                        const exceededRetakes = studentCourse.retakeAttempts.length > MAX_RETAKES_PER_COURSE;
 
                         return (
-                          <tr key={index} className={hasRetakes ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50'}>
+                          <tr key={index} className={
+                            exceededRetakes ? 'bg-red-100 hover:bg-red-200' :
+                            hasRetakes ? 'bg-yellow-50 hover:bg-yellow-100' :
+                            'hover:bg-gray-50'
+                          }>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-800 border border-gray-300">
                               <strong>{studentCourse.course ? studentCourse.course.code : 'N/A'}</strong>
                             </td>
@@ -273,13 +324,11 @@ const InstitutionStudentProgress = () => {
                                 </div>
                               ) : 'None'}
                             </td>
-                            {/* MODIFICATION START - Displaying marks for Best Grade */}
                             <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${
                               bestGrade.grade === 'F' || bestGrade.grade === 'E' ? 'text-red-600' : 'text-green-700'
                             } border border-gray-300`}>
                               {bestGrade.grade} ({bestGrade.marks}) - {bestGrade.type}
                             </td>
-                            {/* MODIFICATION END */}
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 border border-gray-300">
                               {studentCourse.course ? studentCourse.course.credits : 'N/A'}
                             </td>
@@ -302,15 +351,6 @@ const InstitutionStudentProgress = () => {
             </p>
           </div>
         </div>
-
-        {!canContinueStudy && (
-          <div className="mb-8 p-6 bg-red-100 border-l-4 border-red-500 text-red-700 rounded-lg shadow-md" role="alert">
-            <p className="font-bold text-lg">Important Notice:</p>
-            <p className="mt-2 text-base">
-              This student has accumulated <strong>{retakeCount} retakes</strong>, which exceeds the maximum allowed retakes at the University of Rwanda. Consequently, this student is <strong>no longer eligible to continue their studies</strong> at the University.
-            </p>
-          </div>
-        )}
 
         <div className="mt-8 bg-white shadow overflow-hidden rounded-lg p-6 border border-gray-200">
           <h2 className="text-2xl font-bold leading-tight text-gray-900 mb-6 pb-2 border-b">

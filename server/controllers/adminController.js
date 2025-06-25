@@ -367,26 +367,26 @@ exports.assignCourseToStudent = async (req, res, next) => {
       courseId,
       marks,
       grade,
-      isRetake, // Flag indicating if this is a retake attempt
+      isRetake,
       yearTaken,
       semesterTaken
     } = req.body;
 
-    // Input validation
+    // --- 1. Initial Input Validation ---
     if (!courseId || !yearTaken || !semesterTaken) {
       return res.status(400).json({
         success: false,
         message: 'Course ID, year taken, and semester taken are required.'
       });
     }
-    
+
     if (typeof marks !== 'number' || marks < 0 || marks > 100) {
       return res.status(400).json({
         success: false,
         message: 'Marks must be a number between 0 and 100.'
       });
     }
-    
+
     if (!['A', 'B', 'C', 'D', 'E', 'F', 'N/A'].includes(grade)) {
       return res.status(400).json({
         success: false,
@@ -394,6 +394,7 @@ exports.assignCourseToStudent = async (req, res, next) => {
       });
     }
 
+    // --- 2. Fetch Student and Course ---
     const student = await Student.findById(studentId).populate('courses.course');
     if (!student) {
       return res.status(404).json({
@@ -410,8 +411,65 @@ exports.assignCourseToStudent = async (req, res, next) => {
       });
     }
 
-    // Prerequisite Check
+    // Find if this course already exists in the student's record
+    let existingStudentCourse = student.courses.find(
+      sc => sc.course && sc.course._id.toString() === courseId.toString()
+    );
+
+    // Automatically count as retake if first assignment marks < 50
+    let shouldTreatAsRetake = isRetake;
+    if (!existingStudentCourse && marks < 50) {
+      shouldTreatAsRetake = true;
+    }
+
+    // Collect all validation errors
+    const errors = [];
+
+    // --- 3. Determine Current Retake Status ---
+    const MAX_DIFFERENT_COURSES_WITH_RETAKES = 3;
+    const uniqueCoursesWithRetakes = new Set(
+      student.courses
+        .filter(sc => sc.retakeAttempts && sc.retakeAttempts.length > 0)
+        .map(sc => sc.course._id.toString())
+    );
+
+    // Flag to check if the student is already at or exceeded the limit of different courses with retakes
+    const isAtMaxDifferentRetakeCourses = uniqueCoursesWithRetakes.size >= MAX_DIFFERENT_COURSES_WITH_RETAKES;
+
+    // --- 4. Validation Checks ---
+
+    // Rule 1: Block new (non-retake) assignments if student has 3 different retake courses
+    if (!shouldTreatAsRetake && existingStudentCourse === undefined && isAtMaxDifferentRetakeCourses) {
+        errors.push(`Student has ${MAX_DIFFERENT_COURSES_WITH_RETAKES} different courses with retake attempts. Cannot assign new original courses until academic standing improves.`);
+    }
+
+    // Rule 2: Block new retake assignments if it exceeds the 3 different retake courses limit
+    if (shouldTreatAsRetake) {
+      // Check if this new retake attempt would push the unique count over the limit
+      if (isAtMaxDifferentRetakeCourses && !uniqueCoursesWithRetakes.has(courseId.toString())) {
+        errors.push(`Student has reached the maximum of ${MAX_DIFFERENT_COURSES_WITH_RETAKES} different courses with retake attempts. Cannot add another unique course for retake.`);
+      }
+
+      // Check retake limit per course (original attempt + 2 retakes = 3 total attempts maximum)
+      const MAX_RETAKES_PER_COURSE = 3;
+      if (existingStudentCourse && existingStudentCourse.retakeAttempts.length >= MAX_RETAKES_PER_COURSE) {
+        errors.push(`Student has exceeded the maximum of ${MAX_RETAKES_PER_COURSE} retake attempts for this specific course.`);
+      }
+    }
+
+    // If any retake-related errors found, return them immediately.
+    if (errors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: errors.join(' '),
+        errors: errors
+      });
+    }
+
+    // --- 5. Prerequisite Check (Only if no retake limit errors) ---
     if (courseToAssign.prerequisites && courseToAssign.prerequisites.length > 0) {
+      const missingPrerequisites = [];
+
       for (const prereqId of courseToAssign.prerequisites) {
         const hasPrereq = student.courses.some(sc => {
           const allGrades = [{ grade: sc.originalGrade, marks: sc.originalMarks }];
@@ -423,35 +481,38 @@ exports.assignCourseToStudent = async (req, res, next) => {
 
         if (!hasPrereq) {
           const prereqCourse = await Course.findById(prereqId);
-          return res.status(400).json({
-            success: false,
-            message: `Prerequisite course "${prereqCourse ? prereqCourse.name : 'Unknown'}" not completed by student.`
-          });
+          missingPrerequisites.push(prereqCourse ? prereqCourse.name : 'Unknown');
         }
+      }
+
+      if (missingPrerequisites.length > 0) {
+        errors.push(`Prerequisite course${missingPrerequisites.length > 1 ? 's' : ''} "${missingPrerequisites.join(', ')}" not completed by student with a passing grade.`);
       }
     }
 
-    // Find if this course already exists in the student's record
-    let existingStudentCourse = student.courses.find(
-      sc => sc.course && sc.course._id.toString() === courseId.toString()
-    );
+    // If any prerequisite errors found, return them
+    if (errors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: errors.join(' '),
+        errors: errors
+      });
+    }
 
-    if (isRetake) {
+    // --- 6. Proceed with Assignment if All Validations Pass ---
+    if (shouldTreatAsRetake) {
       // This is a retake attempt
       if (!existingStudentCourse) {
-        return res.status(400).json({
-          success: false,
-          message: 'Cannot assign as retake: original course record not found for this student.'
+        // Create the original record if this is the first attempt and it's being treated as a retake (e.g., marks < 50)
+        student.courses.push({
+          course: courseId,
+          originalMarks: marks,
+          originalGrade: grade,
+          originalYearTaken: yearTaken,
+          originalSemesterTaken: semesterTaken,
+          retakeAttempts: [] // Initialize empty array for future retakes
         });
-      }
-
-      // Check retake limit (original attempt + 2 retakes = 3 total attempts maximum)
-      const MAX_RETAKES_PER_COURSE = 2;
-      if (existingStudentCourse.retakeAttempts.length >= MAX_RETAKES_PER_COURSE) {
-        return res.status(403).json({
-          success: false,
-          message: `Student has exceeded the maximum of ${MAX_RETAKES_PER_COURSE} retake attempts for this course.`
-        });
+        existingStudentCourse = student.courses[student.courses.length - 1];
       }
 
       // Add new retake attempt
@@ -465,18 +526,18 @@ exports.assignCourseToStudent = async (req, res, next) => {
     } else {
       // This is an original course assignment
       if (existingStudentCourse) {
-        // If an original entry already exists, prevent duplicate original assignments
-        if (existingStudentCourse.originalYearTaken === yearTaken && 
+        // Prevent duplicate original assignments for the same semester/year
+        if (existingStudentCourse.originalYearTaken === yearTaken &&
             existingStudentCourse.originalSemesterTaken === semesterTaken) {
           return res.status(400).json({
             success: false,
-            message: 'This course is already assigned to the student for the specified semester and year.'
+            message: 'This course is already assigned to the student for the specified semester and year as an original attempt. If this is a retake, please set "isRetake" to true.'
           });
         }
-        
+        // If the course exists but it's not a retake, it implies trying to assign an "original" course again.
         return res.status(400).json({
-          success: false,
-          message: 'This course is already in the student\'s record. Please specify if this is a retake.'
+            success: false,
+            message: 'This course is already in the student\'s record. Please specify if this is a retake or if you are trying to update an existing record.'
         });
       }
 
@@ -491,8 +552,8 @@ exports.assignCourseToStudent = async (req, res, next) => {
       });
     }
 
-    // Recalculate GPA before saving
-    student.gpa = await calculateGPA(student);
+    // --- 7. Recalculate GPA and Save ---
+    student.gpa = await calculateGPA(student); // Ensure calculateGPA is defined and accessible
     await student.save();
 
     res.status(201).json({
@@ -924,17 +985,49 @@ exports.generateTranscript = async (req, res, next) => {
       return parseInt(a) - parseInt(b);
     });
 
-    // Calculate retake count
+    // Calculate retake statistics
     const retakeCount = student.courses.reduce((count, sc) =>
       count + sc.retakeAttempts.length, 0);
+    
+    const coursesWithRetakes = student.courses.filter(
+      sc => sc.retakeAttempts.length > 0
+    ).length;
 
     let retakeWarning = '';
-    if (retakeCount >= 3) {
+    const MAX_RETAKES_PER_COURSE = 2;
+    const MAX_COURSES_WITH_RETAKES = 3;
+    
+    // Check for course retake limit violation
+    const exceededCourseRetakes = student.courses.some(
+      sc => sc.retakeAttempts.length > MAX_RETAKES_PER_COURSE
+    );
+    
+    // Check for total courses with retakes limit violation
+    const exceededTotalCoursesWithRetakes = coursesWithRetakes > MAX_COURSES_WITH_RETAKES;
+
+    if (exceededCourseRetakes || exceededTotalCoursesWithRetakes) {
       retakeWarning = `
         <div class="retake-warning">
-          <p><strong>IMPORTANT NOTICE:</strong> This student has accumulated <strong>${retakeCount} retakes</strong>,
-          which exceeds the maximum allowed retakes at the University of Rwanda. Consequently, this student is
-          <strong>no longer eligible to continue their studies</strong> at the University.</p>
+          <p><strong>IMPORTANT NOTICE:</strong> This student has violated the University of Rwanda retake policies:</p>
+          <ul>
+            ${exceededCourseRetakes ? 
+              `<li>Exceeded maximum of ${MAX_RETAKES_PER_COURSE} retakes in one or more courses (original + ${MAX_RETAKES_PER_COURSE} retakes allowed)</li>` : ''}
+            ${exceededTotalCoursesWithRetakes ? 
+              `<li>Exceeded maximum of ${MAX_COURSES_WITH_RETAKES} different courses with retake attempts</li>` : ''}
+          </ul>
+          <p>This student is <strong>no longer eligible to continue their studies</strong> at the University.</p>
+        </div>
+      `;
+    } else if (retakeCount > 0) {
+      // Show informational message if student has retakes but hasn't exceeded limits
+      retakeWarning = `
+        <div class="retake-notice">
+          <p><strong>Retake Information:</strong> This student has:</p>
+          <ul>
+            <li>${retakeCount} total retake attempts across all courses</li>
+            <li>Retakes in ${coursesWithRetakes} different courses</li>
+          </ul>
+          <p>University policy allows maximum ${MAX_RETAKES_PER_COURSE} retakes per course (original + ${MAX_RETAKES_PER_COURSE} retakes) and retakes in maximum ${MAX_COURSES_WITH_RETAKES} different courses.</p>
         </div>
       `;
     }
@@ -983,6 +1076,14 @@ exports.generateTranscript = async (req, res, next) => {
             font-size: 12pt;
             font-weight: bold;
             border-radius: 8px;
+          }
+          .retake-notice {
+            border: 1px solid #3498db;
+            background-color: #ebf5fb;
+            color: #2980b9;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
           }
         </style>
       </head>

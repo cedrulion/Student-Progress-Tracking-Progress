@@ -51,7 +51,7 @@ const calculateGPA = (student) => {
                     if (g.marks > bestGrade.marks) {
                         bestGrade = g;
                     } else if (g.marks === bestGrade.marks &&
-                               GRADE_POINTS_5_SCALE[g.grade] > GRADE_POINTS_5_SCALE[bestGrade.grade]) {
+                                GRADE_POINTS_5_SCALE[g.grade] > GRADE_POINTS_5_SCALE[bestGrade.grade]) {
                         bestGrade = g;
                     }
                 }
@@ -134,7 +134,7 @@ exports.getStudentTranscript = async (req, res, next) => {
         }
 
         // Calculate GPA based on best attempts
-        student.gpa = calculateGPA(student);
+        student.gpa = calculateGPA(student); // <--- This line uses the calculateGPA function
 
         // Group courses by year
         const coursesByYear = student.courses.reduce((acc, studentCourse) => {
@@ -170,20 +170,61 @@ exports.getStudentTranscript = async (req, res, next) => {
                     studentId: student.studentId,
                     program: student.program,
                     department: student.department,
-                    gpa: student.gpa
+                    gpa: student.gpa // <--- The calculated GPA is included here
                 },
                 courses: sortedYears.map(year => ({
                     year,
-                    courses: coursesByYear[year].map(sc => ({
-                        code: sc.course?.code || 'N/A',
-                        name: sc.course?.name || 'N/A',
-                        semester: sc.originalSemesterTaken,
-                        yearTaken: sc.originalYearTaken,
-                        credits: sc.course?.credits || 0,
-                        originalGrade: sc.originalGrade,
-                        originalMarks: sc.originalMarks,
-                        retakeAttempts: sc.retakeAttempts
-                    }))
+                    courses: coursesByYear[year].map(sc => {
+                        const allGrades = [{
+                            grade: sc.originalGrade,
+                            marks: sc.originalMarks,
+                            type: 'Original'
+                        }];
+
+                        sc.retakeAttempts.forEach(attempt => {
+                            allGrades.push({
+                                grade: attempt.grade,
+                                marks: attempt.marks,
+                                type: 'Retake'
+                            });
+                        });
+
+                        let bestGrade = { grade: 'N/A', marks: -1, type: '' };
+                        allGrades.forEach(g => {
+                            if (g.grade !== 'N/A') {
+                                if (g.marks > bestGrade.marks) {
+                                    bestGrade = g;
+                                } else if (g.marks === bestGrade.marks &&
+                                    GRADE_POINTS_5_SCALE[g.grade] > GRADE_POINTS_5_SCALE[bestGrade.grade]) {
+                                    bestGrade = g;
+                                }
+                            }
+                        });
+
+                        // Current marks for display in the JSON response
+                        let currentMarks = bestGrade.marks;
+                        // if (bestGrade.type === 'Retake') {
+                        //     currentMarks = Math.min(bestGrade.marks, 50); // Apply the 50 cap for display if policy dictates
+                        // }
+
+                        return {
+                            code: sc.course?.code || 'N/A',
+                            name: sc.course?.name || 'N/A',
+                            semester: sc.originalSemesterTaken,
+                            yearTaken: sc.originalYearTaken,
+                            credits: sc.course?.credits || 0,
+                            originalGrade: sc.originalGrade,
+                            originalMarks: sc.originalMarks,
+                            retakeAttempts: sc.retakeAttempts.map(attempt => ({
+                                grade: attempt.grade,
+                                marks: attempt.marks,
+                                semesterTaken: attempt.semesterTaken,
+                                yearTaken: attempt.yearTaken
+                            })),
+                            currentBestGrade: bestGrade.grade,
+                            currentBestMarks: currentMarks // Adjusted for display if needed
+                        };
+                    })
                 }))
             }
         });
@@ -357,7 +398,7 @@ exports.downloadTranscript = async (req, res, next) => {
                                             if (g.marks > bestGrade.marks) {
                                                 bestGrade = g;
                                             } else if (g.marks === bestGrade.marks &&
-                                                       GRADE_POINTS_5_SCALE[g.grade] > GRADE_POINTS_5_SCALE[bestGrade.grade]) {
+                                                        GRADE_POINTS_5_SCALE[g.grade] > GRADE_POINTS_5_SCALE[bestGrade.grade]) {
                                                 bestGrade = g;
                                             }
                                         }

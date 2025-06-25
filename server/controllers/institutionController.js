@@ -26,6 +26,10 @@ const GRADE_POINTS_5_SCALE = {
   'N/A': 0
 };
 
+// Retake policy constants
+const MAX_RETAKES_PER_COURSE = 3; // Original + 2 retakes = 3 total attempts
+const MAX_COURSES_WITH_RETAKES = 3; // Max different courses that can have retakes
+
 // Helper function to calculate GPA based on best attempts
 const calculateGPA = (student) => {
   let totalPoints = 0;
@@ -437,14 +441,42 @@ exports.downloadApprovedStudentTranscript = async (req, res, next) => {
       return parseInt(a) - parseInt(b);
     });
 
-    // Calculate total retake attempts
-    const retakeCount = student.courses.reduce((count, course) => count + course.retakeAttempts.length, 0);
+    // Calculate retake statistics
+    const retakeCount = student.courses.reduce((count, sc) => count + sc.retakeAttempts.length, 0);
+    const coursesWithRetakes = student.courses.filter(sc => sc.retakeAttempts.length > 0).length;
 
     let retakeWarning = '';
-    if (retakeCount >= 3) {
+    // Check for course retake limit violation
+    const exceededCourseRetakes = student.courses.some(
+      sc => sc.retakeAttempts.length > MAX_RETAKES_PER_COURSE
+    );
+    
+    // Check for total courses with retakes limit violation
+    const exceededTotalCoursesWithRetakes = coursesWithRetakes > MAX_COURSES_WITH_RETAKES;
+
+    if (exceededCourseRetakes || exceededTotalCoursesWithRetakes) {
       retakeWarning = `
         <div class="retake-warning">
-          <p><strong>IMPORTANT NOTICE:</strong> This student has accumulated <strong>${retakeCount} retakes</strong>, which exceeds the maximum allowed retakes at the University of Rwanda. Consequently, this student is <strong>no longer eligible to continue their studies</strong> at the University.</p>
+          <p><strong>IMPORTANT NOTICE:</strong> This student has violated the University of Rwanda retake policies:</p>
+          <ul>
+            ${exceededCourseRetakes ? 
+              `<li>Exceeded maximum of ${MAX_RETAKES_PER_COURSE} retakes in one or more courses (original + ${MAX_RETAKES_PER_COURSE} retakes allowed)</li>` : ''}
+            ${exceededTotalCoursesWithRetakes ? 
+              `<li>Exceeded maximum of ${MAX_COURSES_WITH_RETAKES} different courses with retake attempts</li>` : ''}
+          </ul>
+          <p>This student is <strong>no longer eligible to continue their studies</strong> at the University.</p>
+        </div>
+      `;
+    } else if (retakeCount > 0) {
+      // Show informational message if student has retakes but hasn't exceeded limits
+      retakeWarning = `
+        <div class="retake-notice">
+          <p><strong>Retake Information:</strong> This student has:</p>
+          <ul>
+            <li>${retakeCount} total retake attempts across all courses</li>
+            <li>Retakes in ${coursesWithRetakes} different courses</li>
+          </ul>
+          <p>University policy allows maximum ${MAX_RETAKES_PER_COURSE} retakes per course (original + ${MAX_RETAKES_PER_COURSE} retakes) and retakes in maximum ${MAX_COURSES_WITH_RETAKES} different courses.</p>
         </div>
       `;
     }
@@ -493,6 +525,14 @@ exports.downloadApprovedStudentTranscript = async (req, res, next) => {
             font-size: 12pt;
             font-weight: bold;
             border-radius: 8px;
+          }
+          .retake-notice {
+            border: 1px solid #3498db;
+            background-color: #ebf5fb;
+            color: #2980b9;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
           }
         </style>
       </head>
